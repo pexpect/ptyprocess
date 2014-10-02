@@ -73,6 +73,8 @@ def _make_eof_intr():
     _INTR = _byte(intr)
     _EOF = _byte(eof)
 
+class PtyProcessError(Exception):
+    """Generic error class for this package."""
 
 class PtyProcess(object):
     '''This class represents a process running in a pseudoterminal.
@@ -280,7 +282,7 @@ class PtyProcess(object):
             time.sleep(self.delayafterclose)
             if self.isalive():
                 if not self.terminate(force):
-                    raise ExceptionPexpect('Could not terminate the child.')
+                    raise PtyProcessError('Could not terminate the child.')
             self.child_fd = -1
             self.closed = True
             #self.pid = None
@@ -445,7 +447,7 @@ class PtyProcess(object):
             r, w, e = self.__select([self.child_fd], [], [], 0)
             if not r:
                 self.flag_eof = True
-                raise EOF('End Of File (EOF). Braindead platform.')
+                raise EOFError('End Of File (EOF). Braindead platform.')
         elif self.__irix_hack:
             # Irix takes a long time before it realizes a child was terminated.
             # FIXME So does this mean Irix systems are forced to always have
@@ -453,7 +455,7 @@ class PtyProcess(object):
             r, w, e = self.__select([self.child_fd], [], [], 2)
             if not r and not self.isalive():
                 self.flag_eof = True
-                raise EOF('End Of File (EOF). Slow platform.')
+                raise EOFError('End Of File (EOF). Slow platform.')
 
         r, w, e = self.__select([self.child_fd], [], [], timeout)
 
@@ -463,7 +465,7 @@ class PtyProcess(object):
                 # processes are alive; timeout on the select; and
                 # then finally admit that they are not alive.
                 self.flag_eof = True
-                raise EOF('End of File (EOF). Very slow platform.')
+                raise EOFError('End of File (EOF). Very slow platform.')
             else:
                 raise TIMEOUT('Timeout exceeded.')
 
@@ -474,18 +476,17 @@ class PtyProcess(object):
                 if err.args[0] == errno.EIO:
                     # Linux-style EOF
                     self.flag_eof = True
-                    raise EOF('End Of File (EOF). Exception style platform.')
+                    raise EOFError('End Of File (EOF). Exception style platform.')
                 raise
             if s == b'':
                 # BSD-style EOF
                 self.flag_eof = True
-                raise EOF('End Of File (EOF). Empty string style platform.')
+                raise EOFError('End Of File (EOF). Empty string style platform.')
 
             s = self._coerce_read_string(s)
-            self._log(s, 'read')
             return s
 
-        raise ExceptionPexpect('Reached an unexpected state.')  # pragma: no cover
+        raise PtyProcessError('Reached an unexpected state.')  # pragma: no cover
 
     def read(self, size=-1):
         '''This reads at most "size" bytes from the file (less if the read hits
@@ -666,7 +667,7 @@ class PtyProcess(object):
         if self.isalive():
             pid, status = os.waitpid(self.pid, 0)
         else:
-            raise ExceptionPexpect('Cannot wait for dead child process.')
+            raise PtyProcessError('Cannot wait for dead child process.')
         self.exitstatus = os.WEXITSTATUS(status)
         if os.WIFEXITED(status):
             self.status = status
@@ -680,7 +681,7 @@ class PtyProcess(object):
             self.terminated = True
         elif os.WIFSTOPPED(status):  # pragma: no cover
             # You can't call wait() on a child process in the stopped state.
-            raise ExceptionPexpect('Called wait() on a stopped child ' +
+            raise PtyProcessError('Called wait() on a stopped child ' +
                     'process. This is not supported. Is some other ' +
                     'process attempting job control with our child pid?')
         return self.exitstatus
@@ -710,7 +711,7 @@ class PtyProcess(object):
             err = sys.exc_info()[1]
             # No child processes
             if err.errno == errno.ECHILD:
-                raise ExceptionPexpect('isalive() encountered condition ' +
+                raise PtyProcessError('isalive() encountered condition ' +
                         'where "terminated" is 0, but there was no child ' +
                         'process. Did someone else call waitpid() ' +
                         'on our process?')
@@ -728,7 +729,7 @@ class PtyProcess(object):
             except OSError as e:  # pragma: no cover
                 # This should never happen...
                 if e.errno == errno.ECHILD:
-                    raise ExceptionPexpect('isalive() encountered condition ' +
+                    raise PtyProcessError('isalive() encountered condition ' +
                             'that should never happen. There was no child ' +
                             'process. Did someone else call waitpid() ' +
                             'on our process?')
@@ -757,7 +758,7 @@ class PtyProcess(object):
             self.signalstatus = os.WTERMSIG(status)
             self.terminated = True
         elif os.WIFSTOPPED(status):
-            raise ExceptionPexpect('isalive() encountered condition ' +
+            raise PtyProcessError('isalive() encountered condition ' +
                     'where child process is stopped. This is not ' +
                     'supported. Is some other process attempting ' +
                     'job control with our child pid?')
