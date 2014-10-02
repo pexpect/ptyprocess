@@ -13,7 +13,7 @@ import time
 import tty
 
 # Constants
-from pty import (STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CHILD)
+from pty import (STDIN_FILENO, STDOUT_FILENO, CHILD)
 
 from .util import which
 
@@ -35,6 +35,8 @@ if PY3:
 else:
     def _byte(i):
         return chr(i)
+    
+    FileNotFoundError = OSError
 
 _EOF, _INTR = None, None
 
@@ -73,8 +75,10 @@ def _make_eof_intr():
 
 
 class PtyProcess(object):
-    '''This is the main class interface for Pexpect. Use this class to start
-    and control child applications. '''
+    '''This class represents a process running in a pseudoterminal.
+    
+    The main constructor is the :meth:`spawn` classmethod.
+    '''
     string_type = bytes
     if PY3:
         allowed_string_types = (bytes, str)
@@ -110,161 +114,13 @@ class PtyProcess(object):
         self.fd = fd
         self.fileobj = self.fileobj_bytes = io.open(fd, 'r+b', buffering=0)
 
-    @classmethod
-    def spawn(cls, argv, timeout=30, maxread=2000,
-        searchwindowsize=None, logfile=None, cwd=None, env=None,
-        ignore_sighup=True, echo=True):
-
-        '''This is the constructor. The command parameter may be a string that
-        includes a command and any arguments to the command. For example::
-
-            child = pexpect.spawn('/usr/bin/ftp')
-            child = pexpect.spawn('/usr/bin/ssh user@example.com')
-            child = pexpect.spawn('ls -latr /tmp')
-
-        You may also construct it with a list of arguments like so::
-
-            child = pexpect.spawn('/usr/bin/ftp', [])
-            child = pexpect.spawn('/usr/bin/ssh', ['user@example.com'])
-            child = pexpect.spawn('ls', ['-latr', '/tmp'])
-
-        After this the child application will be created and will be ready to
-        talk to. For normal use, see expect() and send() and sendline().
-
-        Remember that Pexpect does NOT interpret shell meta characters such as
-        redirect, pipe, or wild cards (``>``, ``|``, or ``*``). This is a
-        common mistake.  If you want to run a command and pipe it through
-        another command then you must also start a shell. For example::
-
-            child = pexpect.spawn('/bin/bash -c "ls -l | grep LOG > logs.txt"')
-            child.expect(pexpect.EOF)
-
-        The second form of spawn (where you pass a list of arguments) is useful
-        in situations where you wish to spawn a command and pass it its own
-        argument list. This can make syntax more clear. For example, the
-        following is equivalent to the previous example::
-
-            shell_cmd = 'ls -l | grep LOG > logs.txt'
-            child = pexpect.spawn('/bin/bash', ['-c', shell_cmd])
-            child.expect(pexpect.EOF)
-
-        The maxread attribute sets the read buffer size. This is maximum number
-        of bytes that Pexpect will try to read from a TTY at one time. Setting
-        the maxread size to 1 will turn off buffering. Setting the maxread
-        value higher may help performance in cases where large amounts of
-        output are read back from the child. This feature is useful in
-        conjunction with searchwindowsize.
-
-        The searchwindowsize attribute sets the how far back in the incoming
-        seach buffer Pexpect will search for pattern matches. Every time
-        Pexpect reads some data from the child it will append the data to the
-        incoming buffer. The default is to search from the beginning of the
-        incoming buffer each time new data is read from the child. But this is
-        very inefficient if you are running a command that generates a large
-        amount of data where you want to match. The searchwindowsize does not
-        affect the size of the incoming data buffer. You will still have
-        access to the full buffer after expect() returns.
-
-        The logfile member turns on or off logging. All input and output will
-        be copied to the given file object. Set logfile to None to stop
-        logging. This is the default. Set logfile to sys.stdout to echo
-        everything to standard output. The logfile is flushed after each write.
-
-        Example log input and output to a file::
-
-            child = pexpect.spawn('some_command')
-            fout = open('mylog.txt','wb')
-            child.logfile = fout
-
-        Example log to stdout::
-
-            # In Python 2:
-            child = pexpect.spawn('some_command')
-            child.logfile = sys.stdout
-
-            # In Python 3, spawnu should be used to give str to stdout:
-            child = pexpect.spawnu('some_command')
-            child.logfile = sys.stdout
-
-        The logfile_read and logfile_send members can be used to separately log
-        the input from the child and output sent to the child. Sometimes you
-        don't want to see everything you write to the child. You only want to
-        log what the child sends back. For example::
-
-            child = pexpect.spawn('some_command')
-            child.logfile_read = sys.stdout
-        
-        Remember to use spawnu instead of spawn for the above code if you are
-        using Python 3.
-
-        To separately log output sent to the child use logfile_send::
-
-            child.logfile_send = fout
-
-        If ``ignore_sighup`` is True, the child process will ignore SIGHUP
-        signals. For now, the default is True, to preserve the behaviour of
-        earlier versions of Pexpect, but you should pass this explicitly if you
-        want to rely on it.
-
-        The delaybeforesend helps overcome a weird behavior that many users
-        were experiencing. The typical problem was that a user would expect() a
-        "Password:" prompt and then immediately call sendline() to send the
-        password. The user would then see that their password was echoed back
-        to them. Passwords don't normally echo. The problem is caused by the
-        fact that most applications print out the "Password" prompt and then
-        turn off stdin echo, but if you send your password before the
-        application turned off echo, then you get your password echoed.
-        Normally this wouldn't be a problem when interacting with a human at a
-        real keyboard. If you introduce a slight delay just before writing then
-        this seems to clear up the problem. This was such a common problem for
-        many users that I decided that the default pexpect behavior should be
-        to sleep just before writing to the child application. 1/20th of a
-        second (50 ms) seems to be enough to clear up the problem. You can set
-        delaybeforesend to 0 to return to the old behavior. Most Linux machines
-        don't like this to be below 0.03. I don't know why.
-
-        Note that spawn is clever about finding commands on your path.
-        It uses the same logic that "which" uses to find executables.
-
-        If you wish to get the exit status of the child you must call the
-        close() method. The exit or signal status of the child will be stored
-        in self.exitstatus or self.signalstatus. If the child exited normally
-        then exitstatus will store the exit return code and signalstatus will
-        be None. If the child was terminated abnormally with a signal then
-        signalstatus will store the signal value and exitstatus will be None.
-        If you need more detail you can also read the self.status member which
-        stores the status returned by os.waitpid. You can interpret this using
-        os.WIFEXITED/os.WEXITSTATUS or os.WIFSIGNALED/os.TERMSIG.
-
-        The echo attribute may be set to False to disable echoing of input.
-        As a pseudo-terminal, all input echoed by the "keyboard" (send()
-        or sendline()) will be repeated to output.  For many cases, it is
-        not desirable to have echo enabled, and it may be later disabled
-        using setecho(False) followed by waitnoecho().  However, for some
-        platforms such as Solaris, this is not possible, and should be
-        disabled immediately on spawn.
-        '''
-        self=1
-
-        self.terminated = True
+        self.terminated = False
+        self.closed = False
         self.exitstatus = None
         self.signalstatus = None
         # status returned by os.waitpid
         self.status = None
         self.flag_eof = False
-        # the child file descriptor is initially closed
-        self.child_fd = -1
-        self.logfile = logfile
-        # input from child (read_nonblocking)
-        self.logfile_read = None
-        # output to send (send, sendline)
-        self.logfile_send = None
-        # max bytes to read at one time into buffer
-        self.maxread = maxread
-        # This is the read buffer. See maxread.
-        self.buffer = self.string_type()
-        # Data before searchwindowsize point is preserved, but not searched.
-        self.searchwindowsize = searchwindowsize
         # Delay used before sending data to child. Time in seconds.
         # Most Linux machines don't like this to be below 0.03 (30 ms).
         self.delaybeforesend = 0.05
@@ -274,27 +130,18 @@ class PtyProcess(object):
         # Used by terminate() to give kernel time to update process status.
         # Time in seconds.
         self.delayafterterminate = 0.1
-        self.softspace = False
-        self.closed = True
-        self.echo = echo
-        self.ignore_sighup = ignore_sighup
-        _platform = sys.platform.lower()
         # This flags if we are running on irix
         self.__irix_hack = _platform.startswith('irix')
-        # Solaris uses internal __fork_pty(). All others use pty.fork().
-        self.use_native_pty_fork = not (
-                _platform.startswith('solaris') or
-                _platform.startswith('sunos'))
 
-        '''This starts the given command in a child process. This does all the
-        fork/exec type of stuff for a pty. This is called by __init__. If args
-        is empty then command will be parsed (split on spaces) and args will be
-        set to parsed arguments. '''
-
-
-        ## _spawn()
-
-        # The pid and child_fd of this object get set by this method.
+    @classmethod
+    def spawn(cls, argv, timeout=30, maxread=2000,
+        searchwindowsize=None, logfile=None, cwd=None, env=None,
+        ignore_sighup=True, echo=True):
+        '''Start the given command in a child process in a pseudo terminal.
+        
+        This does all the fork/exec type of stuff for a pty, and returns an
+        instance of PtyProcess.
+        '''
         # Note that it is difficult for this method to fail.
         # You cannot detect if the child process cannot start.
         # So the only way you can tell if the child process started
@@ -309,33 +156,36 @@ class PtyProcess(object):
 
         command_with_path = which(command)
         if command_with_path is None:
-            raise ExceptionPexpect('The command was not found or was not ' +
-                    'executable: %s.' % self.command)
+            raise FileNotFoundError('The command was not found or was not ' +
+                                    'executable: %s.' % command)
         command = command_with_path
         argv[0] = command
 
-        if self.use_native_pty_fork:
-            pid, child_fd = pty.fork()
+        if use_native_pty_fork:
+            pid, fd = pty.fork()
         else:
             # Use internal fork_pty, for Solaris
-            pid, child_fd = _fork_pty.fork_pty()
+            pid, fd = _fork_pty.fork_pty()
 
         # Some platforms must call setwinsize() and setecho() from the
         # child process, and others from the master process. We do both,
         # allowing IOError for either.
 
         if pid == CHILD:
+            # HACK: Make a PtyProcess instance in the child, so we can use our
+            # implementation of setecho() and setwinsize()
+            inst = cls(0, fd)
             # set default window size of 24 rows by 80 columns
             try:
-                self.setwinsize(24, 80)
+                inst.setwinsize(24, 80)
             except IOError as err:
                 if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                     raise
 
             # disable echo if spawn argument echo was unset
-            if not self.echo:
+            if not echo:
                 try:
-                    self.setecho(self.echo)
+                    inst.setecho(False)
                 except (IOError, termios.error) as err:
                     if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                         raise
@@ -352,7 +202,7 @@ class PtyProcess(object):
                 os.execvpe(command, argv, env)
 
         # Parent
-        inst = cls(pid, child_fd)
+        inst = cls(pid, fd)
         
         # Set some informational attributes
         inst.argv = argv
@@ -368,9 +218,6 @@ class PtyProcess(object):
                 raise
 
         return inst
-
-        self.terminated = False
-        self.closed = False
 
     def __repr__(self):
         clsname = type(self).__name__
