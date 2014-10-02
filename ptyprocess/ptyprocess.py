@@ -12,10 +12,20 @@ import termios
 import time
 import tty
 
-from .util import which
-
 # Constants
 from pty import (STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CHILD)
+
+from .util import which
+
+_platform = sys.platform.lower()
+
+# Solaris uses internal __fork_pty(). All others use pty.fork().
+use_native_pty_fork = not (
+    _platform.startswith('solaris') or
+    _platform.startswith('sunos'))
+
+if not use_native_pty_fork:
+    from . import _fork_pty
 
 PY3 = sys.version_info[0] >= 3
 
@@ -307,8 +317,8 @@ class PtyProcess(object):
         if self.use_native_pty_fork:
             pid, child_fd = pty.fork()
         else:
-            # Use internal __fork_pty
-            pid, child_fd = self.__fork_pty()
+            # Use internal fork_pty, for Solaris
+            pid, child_fd = _fork_pty.fork_pty()
 
         # Some platforms must call setwinsize() and setecho() from the
         # child process, and others from the master process. We do both,
@@ -402,77 +412,6 @@ class PtyProcess(object):
             # which exception, shouldnt' we catch explicitly .. ?
             except:
                 pass
-
-    def __fork_pty(self):
-        '''This implements a substitute for the forkpty system call. This
-        should be more portable than the pty.fork() function. Specifically,
-        this should work on Solaris.
-
-        Modified 10.06.05 by Geoff Marshall: Implemented __fork_pty() method to
-        resolve the issue with Python's pty.fork() not supporting Solaris,
-        particularly ssh. Based on patch to posixmodule.c authored by Noah
-        Spurrier::
-
-            http://mail.python.org/pipermail/python-dev/2003-May/035281.html
-
-        '''
-
-        parent_fd, child_fd = os.openpty()
-        if parent_fd < 0 or child_fd < 0:
-            raise ExceptionPexpect("Could not open with os.openpty().")
-
-        pid = os.fork()
-        if pid == CHILD:
-            # Child.
-            os.close(parent_fd)
-            self.__pty_make_controlling_tty(child_fd)
-
-            os.dup2(child_fd, STDIN_FILENO)
-            os.dup2(child_fd, STDOUT_FILENO)
-            os.dup2(child_fd, STDERR_FILENO)
-
-        else:
-            # Parent.
-            os.close(child_fd)
-
-        return pid, parent_fd
-
-    def __pty_make_controlling_tty(self, tty_fd):
-        '''This makes the pseudo-terminal the controlling tty. This should be
-        more portable than the pty.fork() function. Specifically, this should
-        work on Solaris. '''
-
-        child_name = os.ttyname(tty_fd)
-
-        # Disconnect from controlling tty, if any.  Raises OSError of ENXIO
-        # if there was no controlling tty to begin with, such as when
-        # executed by a cron(1) job.
-        try:
-            fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
-            os.close(fd)
-        except OSError as err:
-            if err.errno != errno.ENXIO:
-                raise
-
-        os.setsid()
-
-        # Verify we are disconnected from controlling tty by attempting to open
-        # it again.  We expect that OSError of ENXIO should always be raised.
-        try:
-            fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
-            os.close(fd)
-            raise ExceptionPexpect("OSError of errno.ENXIO should be raised.")
-        except OSError as err:
-            if err.errno != errno.ENXIO:
-                raise
-
-        # Verify we can open child pty.
-        fd = os.open(child_name, os.O_RDWR)
-        os.close(fd)
-
-        # Verify we now have a controlling tty.
-        fd = os.open("/dev/tty", os.O_WRONLY)
-        os.close(fd)
 
 
     def fileno(self):
