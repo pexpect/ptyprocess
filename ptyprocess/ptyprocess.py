@@ -5,6 +5,7 @@ import os
 import pty
 import re
 import resource
+import select
 import signal
 import struct
 import sys
@@ -20,12 +21,17 @@ from .util import which
 _platform = sys.platform.lower()
 
 # Solaris uses internal __fork_pty(). All others use pty.fork().
-use_native_pty_fork = not (
+_is_solaris = not (
     _platform.startswith('solaris') or
     _platform.startswith('sunos'))
 
-if not use_native_pty_fork:
+_is_irix = _platform.startswith('irix')
+
+if _is_solaris:
+    use_native_pty_fork = False
     from . import _fork_pty
+else:
+    use_native_pty_fork = True
 
 PY3 = sys.version_info[0] >= 3
 
@@ -36,7 +42,8 @@ else:
     def _byte(i):
         return chr(i)
     
-    FileNotFoundError = OSError
+    class FileNotFoundError(OSError): pass
+    class TimeoutError(OSError): pass
 
 _EOF, _INTR = None, None
 
@@ -83,10 +90,6 @@ class PtyProcess(object):
     '''
     string_type = bytes
     if PY3:
-        allowed_string_types = (bytes, str)
-        @staticmethod
-        def _chr(c):
-            return bytes([c])
         linesep = os.linesep.encode('ascii')
         crlf = '\r\n'.encode('ascii')
 
@@ -98,8 +101,6 @@ class PtyProcess(object):
                 # If stdout has been replaced, it may not have .buffer
                 return sys.stdout.write(b.decode('ascii', 'replace'))
     else:
-        allowed_string_types = (basestring,)  # analysis:ignore
-        _chr = staticmethod(chr)
         linesep = os.linesep
         crlf = '\r\n'
         write_to_stdout = sys.stdout.write
@@ -132,8 +133,6 @@ class PtyProcess(object):
         # Used by terminate() to give kernel time to update process status.
         # Time in seconds.
         self.delayafterterminate = 0.1
-        # This flags if we are running on irix
-        self.__irix_hack = _platform.startswith('irix')
 
     @classmethod
     def spawn(cls, argv, timeout=30, maxread=2000,
@@ -448,7 +447,7 @@ class PtyProcess(object):
             if not r:
                 self.flag_eof = True
                 raise EOFError('End Of File (EOF). Braindead platform.')
-        elif self.__irix_hack:
+        elif _is_irix:
             # Irix takes a long time before it realizes a child was terminated.
             # FIXME So does this mean Irix systems are forced to always have
             # FIXME a 2 second delay when calling read_nonblocking? That sucks.
@@ -467,7 +466,7 @@ class PtyProcess(object):
                 self.flag_eof = True
                 raise EOFError('End of File (EOF). Very slow platform.')
             else:
-                raise TIMEOUT('Timeout exceeded.')
+                raise TimeoutError('Timeout exceeded.')
 
         if self.child_fd in r:
             try:
@@ -927,6 +926,11 @@ class PtyProcess(object):
                     raise
 
 class PtyProcessUnicode(PtyProcess):
+    if PY3:
+        string_type = str
+    else:
+        string_type = unicode   # analysis:ignore
+
     def __init__(self, pid, fd, encoding='utf-8', codec_errors='strict',
                  newline=None):
         super(PtyProcessUnicode, self).__init__(pid, fd)
