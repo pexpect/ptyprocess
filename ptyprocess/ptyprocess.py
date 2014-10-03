@@ -1,3 +1,4 @@
+import codecs
 import errno
 import fcntl
 import io
@@ -421,7 +422,7 @@ class PtyProcess(object):
 
         self.echo = state
 
-    def read_checking_eof(self, size=-1):
+    def read(self, size=1024):
         """Read, and convert different platforms' EOF indications to EOFError.
         
         Unlike Pexpect's ``read_nonblocking`` method, this doesn't try to deal
@@ -432,6 +433,22 @@ class PtyProcess(object):
         """
         try:
             s = self.fileobj.read(size)
+        except (OSError, IOError) as err:
+            if err.args[0] == errno.EIO:
+                # Linux-style EOF
+                self.flag_eof = True
+                raise EOFError('End Of File (EOF). Exception style platform.')
+            raise
+        if s == b'':
+            # BSD-style EOF (also appears to work on recent Solaris (OpenIndiana))
+            self.flag_eof = True
+            raise EOFError('End Of File (EOF). Empty string style platform.')
+
+        return s
+
+    def readline(self):
+        try:
+            s = self.fileobj.readline()
         except (OSError, IOError) as err:
             if err.args[0] == errno.EIO:
                 # Linux-style EOF
@@ -811,9 +828,20 @@ class PtyProcessUnicode(PtyProcess):
     else:
         string_type = unicode   # analysis:ignore
 
-    def __init__(self, pid, fd, encoding='utf-8', codec_errors='strict',
-                 newline=None):
+    def __init__(self, pid, fd, encoding='utf-8', codec_errors='strict'):
         super(PtyProcessUnicode, self).__init__(pid, fd)
         self.encoding = encoding
-        self.fileobj = io.TextIOWrapper(self.fileobj_bytes, encoding=encoding,
-                                        errors=codec_errors, newline=newline)
+        self.codec_errors = codec_errors
+        self.decoder = codecs.getincrementaldecoder(encoding)(errors=codec_errors)
+
+    def read(self, size=1024):
+        b = super(PtyProcessUnicode, self).read(size)
+        return self.decoder.decode(b, final=False)
+
+    def readline(self):
+        b = super(PtyProcessUnicode, self).readline()
+        return self.decoder.decode(b, final=False)
+
+    def write(self, s):
+        b = s.encode(self.encoding)
+        return super(PtyProcessUnicode, self).write(b)
