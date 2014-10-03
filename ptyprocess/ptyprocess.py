@@ -83,6 +83,43 @@ def _make_eof_intr():
 class PtyProcessError(Exception):
     """Generic error class for this package."""
 
+# setecho and setwinsize are pulled out here because on some platforms, we need
+# to do this from the child before we exec()
+    
+def _setecho(fd, state):
+    errmsg = 'setecho() may not be called on this platform'
+
+    try:
+        attr = termios.tcgetattr(fd)
+    except termios.error as err:
+        if err.args[0] == errno.EINVAL:
+            raise IOError(err.args[0], '%s: %s.' % (err.args[1], errmsg))
+        raise
+
+    if state:
+        attr[3] = attr[3] | termios.ECHO
+    else:
+        attr[3] = attr[3] & ~termios.ECHO
+
+    try:
+        # I tried TCSADRAIN and TCSAFLUSH, but these were inconsistent and
+        # blocked on some platforms. TCSADRAIN would probably be ideal.
+        termios.tcsetattr(fd, termios.TCSANOW, attr)
+    except IOError as err:
+        if err.args[0] == errno.EINVAL:
+            raise IOError(err.args[0], '%s: %s.' % (err.args[1], errmsg))
+        raise
+
+def _setwinsize(fd, rows, cols):
+    # Some very old platforms have a bug that causes the value for
+    # termios.TIOCSWINSZ to be truncated. There was a hack here to work
+    # around this, but it caused problems with newer platforms so has been
+    # removed. For details see https://github.com/pexpect/pexpect/issues/39
+    TIOCSWINSZ = getattr(termios, 'TIOCSWINSZ', -2146929561)
+    # Note, assume ws_xpixel and ws_ypixel are zero.
+    s = struct.pack('HHHH', rows, cols, 0, 0)
+    fcntl.ioctl(fd, TIOCSWINSZ, s)
+
 class PtyProcess(object):
     '''This class represents a process running in a pseudoterminal.
     
@@ -173,12 +210,9 @@ class PtyProcess(object):
         # allowing IOError for either.
 
         if pid == CHILD:
-            # HACK: Make a PtyProcess instance in the child, so we can use our
-            # implementation of setecho() and setwinsize()
-            inst = cls(0, fd)
             # set default window size of 24 rows by 80 columns
             try:
-                inst.setwinsize(24, 80)
+                _setwinsize(STDIN_FILENO, 24, 80)
             except IOError as err:
                 if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                     raise
@@ -186,7 +220,7 @@ class PtyProcess(object):
             # disable echo if spawn argument echo was unset
             if not echo:
                 try:
-                    inst.setecho(False)
+                    _setecho(STDIN_FILENO, False)
                 except (IOError, termios.error) as err:
                     if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                         raise
@@ -383,29 +417,7 @@ class PtyProcess(object):
 
         Not supported on platforms where ``isatty()`` returns False.
         '''
-
-        errmsg = 'setecho() may not be called on this platform'
-
-        try:
-            attr = termios.tcgetattr(self.child_fd)
-        except termios.error as err:
-            if err.args[0] == errno.EINVAL:
-                raise IOError(err.args[0], '%s: %s.' % (err.args[1], errmsg))
-            raise
-
-        if state:
-            attr[3] = attr[3] | termios.ECHO
-        else:
-            attr[3] = attr[3] & ~termios.ECHO
-
-        try:
-            # I tried TCSADRAIN and TCSAFLUSH, but these were inconsistent and
-            # blocked on some platforms. TCSADRAIN would probably be ideal.
-            termios.tcsetattr(self.child_fd, termios.TCSANOW, attr)
-        except IOError as err:
-            if err.args[0] == errno.EINVAL:
-                raise IOError(err.args[0], '%s: %s.' % (err.args[1], errmsg))
-            raise
+        _setecho(self.fd, state)
 
         self.echo = state
 
@@ -419,8 +431,8 @@ class PtyProcess(object):
         on recent Solaris.
         """
         try:
-            s = self.fileobj.read()
-        except OSError as err:
+            s = self.fileobj.read(size)
+        except (OSError, IOError) as err:
             if err.args[0] == errno.EIO:
                 # Linux-style EOF
                 self.flag_eof = True
@@ -663,14 +675,7 @@ class PtyProcess(object):
         applications like vi or curses -- applications that respond to the
         SIGWINCH signal. '''
 
-        # Some very old platforms have a bug that causes the value for
-        # termios.TIOCSWINSZ to be truncated. There was a hack here to work
-        # around this, but it caused problems with newer platforms so has been
-        # removed. For details see https://github.com/pexpect/pexpect/issues/39
-        TIOCSWINSZ = getattr(termios, 'TIOCSWINSZ', -2146929561)
-        # Note, assume ws_xpixel and ws_ypixel are zero.
-        s = struct.pack('HHHH', rows, cols, 0, 0)
-        fcntl.ioctl(self.fd, TIOCSWINSZ, s)
+        return _setwinsize(self.fd, rows, cols)
 
     def interact(self, escape_character=chr(29),
             input_filter=None, output_filter=None):
