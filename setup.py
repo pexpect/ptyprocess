@@ -12,7 +12,7 @@ setup(name='ptyprocess',
       author='Thomas Kluyver',
       author_email="thomas@kluyver.me.uk",
       url="https://github.com/pexpect/ptyprocess",
-      packages=['nbopen'],
+      packages=['ptyprocess'],
       classifiers = [
         'Development Status :: 5 - Production/Stable',
         'Environment :: Console',
