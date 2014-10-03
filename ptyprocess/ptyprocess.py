@@ -4,18 +4,15 @@ import fcntl
 import io
 import os
 import pty
-import re
 import resource
-import select
 import signal
 import struct
 import sys
 import termios
 import time
-import tty
 
 # Constants
-from pty import (STDIN_FILENO, STDOUT_FILENO, CHILD)
+from pty import (STDIN_FILENO, CHILD)
 
 from .util import which
 
@@ -608,16 +605,15 @@ class PtyProcess(object):
 
         try:
             pid, status = os.waitpid(self.pid, waitpid_options)
-        except OSError:
-            err = sys.exc_info()[1]
+        except OSError as e:
             # No child processes
-            if err.errno == errno.ECHILD:
+            if e.errno == errno.ECHILD:
                 raise PtyProcessError('isalive() encountered condition ' +
                         'where "terminated" is 0, but there was no child ' +
                         'process. Did someone else call waitpid() ' +
                         'on our process?')
             else:
-                raise err
+                raise
 
         # I have to do this twice for Solaris.
         # I can't even believe that I figured this out...
