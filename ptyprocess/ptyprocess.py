@@ -409,83 +409,29 @@ class PtyProcess(object):
 
         self.echo = state
 
-    def read_nonblocking(self, size=1, timeout=-1):
-        '''This reads at most size characters from the child application. It
-        includes a timeout. If the read does not complete within the timeout
-        period then a TIMEOUT exception is raised. If the end of file is read
-        then an EOF exception will be raised. If a log file was set using
-        setlog() then all data will also be written to the log file.
-
-        If timeout is None then the read may block indefinitely.
-        If timeout is -1 then the self.timeout value is used. If timeout is 0
-        then the child is polled and if there is no data immediately ready
-        then this will raise a TIMEOUT exception.
-
-        The timeout refers only to the amount of time to read at least one
-        character. This is not effected by the 'size' parameter, so if you call
-        read_nonblocking(size=100, timeout=30) and only one character is
-        available right away then one character will be returned immediately.
-        It will not wait for 30 seconds for another 99 characters to come in.
-
-        This is a wrapper around os.read(). It uses select.select() to
-        implement the timeout. '''
-
-        if self.closed:
-            raise ValueError('I/O operation on closed file.')
-
-        if timeout == -1:
-            timeout = self.timeout
-
-        # Note that some systems such as Solaris do not give an EOF when
-        # the child dies. In fact, you can still try to read
-        # from the child_fd -- it will block forever or until TIMEOUT.
-        # For this case, I test isalive() before doing any reading.
-        # If isalive() is false, then I pretend that this is the same as EOF.
-        if not self.isalive():
-            # timeout of 0 means "poll"
-            r, w, e = self.__select([self.child_fd], [], [], 0)
-            if not r:
+    def read_checking_eof(self, size=-1):
+        """Read, and convert different platforms' EOF indications to EOFError.
+        
+        Unlike Pexpect's ``read_nonblocking`` method, this doesn't try to deal
+        with the vagaries of EOF on platforms that do strange things, like IRIX
+        or older Solaris systems. It handles the errno=EIO pattern used on
+        Linux, and the empty-string return used on BSD platforms and (seemingly)
+        on recent Solaris.
+        """
+        try:
+            s = self.fileobj.read()
+        except OSError as err:
+            if err.args[0] == errno.EIO:
+                # Linux-style EOF
                 self.flag_eof = True
-                raise EOFError('End Of File (EOF). Braindead platform.')
-        elif _is_irix:
-            # Irix takes a long time before it realizes a child was terminated.
-            # FIXME So does this mean Irix systems are forced to always have
-            # FIXME a 2 second delay when calling read_nonblocking? That sucks.
-            r, w, e = self.__select([self.child_fd], [], [], 2)
-            if not r and not self.isalive():
-                self.flag_eof = True
-                raise EOFError('End Of File (EOF). Slow platform.')
+                raise EOFError('End Of File (EOF). Exception style platform.')
+            raise
+        if s == b'':
+            # BSD-style EOF (also appears to work on recent Solaris (OpenIndiana))
+            self.flag_eof = True
+            raise EOFError('End Of File (EOF). Empty string style platform.')
 
-        r, w, e = self.__select([self.child_fd], [], [], timeout)
-
-        if not r:
-            if not self.isalive():
-                # Some platforms, such as Irix, will claim that their
-                # processes are alive; timeout on the select; and
-                # then finally admit that they are not alive.
-                self.flag_eof = True
-                raise EOFError('End of File (EOF). Very slow platform.')
-            else:
-                raise TimeoutError('Timeout exceeded.')
-
-        if self.child_fd in r:
-            try:
-                s = os.read(self.child_fd, size)
-            except OSError as err:
-                if err.args[0] == errno.EIO:
-                    # Linux-style EOF
-                    self.flag_eof = True
-                    raise EOFError('End Of File (EOF). Exception style platform.')
-                raise
-            if s == b'':
-                # BSD-style EOF
-                self.flag_eof = True
-                raise EOFError('End Of File (EOF). Empty string style platform.')
-
-            s = self._coerce_read_string(s)
-            return s
-
-        raise PtyProcessError('Reached an unexpected state.')  # pragma: no cover
+        return s
 
     def read(self, size=-1):
         '''This reads at most "size" bytes from the file (less if the read hits
