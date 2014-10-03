@@ -173,9 +173,7 @@ class PtyProcess(object):
         self.delayafterterminate = 0.1
 
     @classmethod
-    def spawn(cls, argv, timeout=30, maxread=2000,
-        searchwindowsize=None, logfile=None, cwd=None, env=None,
-        ignore_sighup=True, echo=True):
+    def spawn(cls, argv, cwd=None, env=None, echo=True):
         '''Start the given command in a child process in a pseudo terminal.
         
         This does all the fork/exec type of stuff for a pty, and returns an
