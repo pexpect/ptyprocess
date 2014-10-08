@@ -295,7 +295,7 @@ class PtyProcess(object):
     def fileno(self):
         '''This returns the file descriptor of the pty for the child.
         '''
-        return self.child_fd
+        return self.fd
 
     def close(self, force=True):
         '''This closes the connection with the child application. Note that
@@ -306,13 +306,13 @@ class PtyProcess(object):
 
         if not self.closed:
             self.flush()
-            os.close(self.child_fd)
+            os.close(self.fd)
             # Give kernel time to update process status.
             time.sleep(self.delayafterclose)
             if self.isalive():
                 if not self.terminate(force):
                     raise PtyProcessError('Could not terminate the child.')
-            self.child_fd = -1
+            self.fd = -1
             self.closed = True
             #self.pid = None
 
@@ -331,7 +331,7 @@ class PtyProcess(object):
         methods such as setecho(), setwinsize(), getwinsize() may raise an
         IOError. '''
 
-        return os.isatty(self.child_fd)
+        return os.isatty(self.fd)
 
     def waitnoecho(self, timeout=-1):
         '''This waits until the terminal ECHO flag is set False. This returns
@@ -371,7 +371,7 @@ class PtyProcess(object):
         Not supported on platforms where ``isatty()`` returns False.  '''
 
         try:
-            attr = termios.tcgetattr(self.child_fd)
+            attr = termios.tcgetattr(self.fd)
         except termios.error as err:
             errmsg = 'getecho() may not be called on this platform'
             if err.args[0] == errno.EINVAL:
@@ -473,7 +473,6 @@ class PtyProcess(object):
 
         See also, sendintr() and sendeof().
         '''
-
         char = char.lower()
         a = ord(char)
         if a >= 97 and a <= 122:
