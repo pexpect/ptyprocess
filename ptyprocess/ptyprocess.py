@@ -184,6 +184,9 @@ class PtyProcess(object):
         # That may not necessarily be bad because you may have spawned a child
         # that performs some task; creates no stdout output; and then dies.
 
+        if not isinstance(argv, (list, tuple)):
+            raise TypeError("Expected a list or tuple for argv, got %r" % argv)
+
         # Shallow copy of argv so we can modify it
         argv = argv[:]
         command = argv[0]
