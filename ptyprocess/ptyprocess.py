@@ -159,9 +159,6 @@ class PtyProcess(object):
         # status returned by os.waitpid
         self.status = None
         self.flag_eof = False
-        # Delay used before sending data to child. Time in seconds.
-        # Most Linux machines don't like this to be below 0.03 (30 ms).
-        self.delaybeforesend = 0.05
         # Used by close() to give kernel time to update process status.
         # Time in seconds.
         self.delayafterclose = 0.1
