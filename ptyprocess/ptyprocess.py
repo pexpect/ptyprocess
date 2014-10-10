@@ -150,7 +150,7 @@ class PtyProcess(object):
         _make_eof_intr()  # Ensure _EOF and _INTR are calculated
         self.pid = pid
         self.fd = fd
-        self.fileobj = self.fileobj_bytes = io.open(fd, 'r+b', buffering=0)
+        self.fileobj = io.open(fd, 'r+b', buffering=0)
 
         self.terminated = False
         self.closed = False
@@ -307,10 +307,9 @@ class PtyProcess(object):
         behavior with files. Set force to True if you want to make sure that
         the child is terminated (SIGKILL is sent if the child ignores SIGHUP
         and SIGINT). '''
-
         if not self.closed:
             self.flush()
-            os.close(self.fd)
+            self.fileobj.close() # Closes the file descriptor
             # Give kernel time to update process status.
             time.sleep(self.delayafterclose)
             if self.isalive():
@@ -481,7 +480,7 @@ class PtyProcess(object):
         a = ord(char)
         if a >= 97 and a <= 122:
             a = a - ord('a') + 1
-            return self.fileobj_bytes.write(_byte(a))
+            return self.fileobj.write(_byte(a))
         d = {'@': 0, '`': 0,
             '[': 27, '{': 27,
             '\\': 28, '|': 28,
@@ -492,7 +491,7 @@ class PtyProcess(object):
         if char not in d:
             return 0
         
-        return self.fileobj_bytes.write(_byte(d[char]))
+        return self.fileobj.write(_byte(d[char]))
 
     def sendeof(self):
         '''This sends an EOF to the child. This sends a character which causes
@@ -504,13 +503,13 @@ class PtyProcess(object):
         It is the responsibility of the caller to ensure the eof is sent at the
         beginning of a line. '''
 
-        self.fileobj_bytes.write(_EOF)
+        self.fileobj.write(_EOF)
 
     def sendintr(self):
         '''This sends a SIGINT to the child. It does not require
         the SIGINT to be the first character on a line. '''
 
-        self.fileobj_bytes.write(_EOF)
+        self.fileobj.write(_EOF)
 
     def eof(self):
         '''This returns True if the EOF exception was ever raised.
