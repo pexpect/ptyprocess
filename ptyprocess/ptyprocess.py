@@ -202,7 +202,7 @@ class PtyProcess(object):
         # parent process
 
         # [issue #119] 1. Before forking, open a pipe in the parent process.
-        read_end, write_end = os.pipe()
+        exec_err_pipe_read, exec_err_pipe_write = os.pipe()
 
         if use_native_pty_fork:
             pid, fd = pty.fork()
@@ -232,14 +232,14 @@ class PtyProcess(object):
 
             # [issue #119] 3. The child closes the reading end and sets the
             # close-on-exec flag for the writing end.
-            os.close(read_end)
-            fcntl.fcntl(write_end, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
+            os.close(exec_err_pipe_read)
+            fcntl.fcntl(exec_err_pipe_write, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
 
             # Do not allow child to inherit open file descriptors from parent,
-            # with the exception of the write_end of the pipe
+            # with the exception of the exec_err_pipe_write of the pipe
             max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
-            os.closerange(3, write_end)
-            os.closerange(write_end+1, max_fd)
+            os.closerange(3, exec_err_pipe_write)
+            os.closerange(exec_err_pipe_write+1, max_fd)
 
             if cwd is not None:
                 os.chdir(cwd)
@@ -255,8 +255,9 @@ class PtyProcess(object):
             except OSError as err:
                 # [issue #119] 5. If exec fails, the child writes the error
                 # code back to the parent using the pipe, then exits.
-                os.write(write_end, str(err).encode('utf-8'))
-                os.close(write_end)
+                errbytes = str(err).encode('utf-8') if PY3 else str(err)
+                os.write(exec_err_pipe_write, errbytes)
+                os.close(exec_err_pipe_write)
                 os._exit(os.EX_OSERR)
 
         # Parent
@@ -271,9 +272,9 @@ class PtyProcess(object):
 
         # [issue #119] 2. After forking, the parent closes the writing end
         # of the pipe and reads from the reading end.
-        os.close(write_end)
-        data = os.read(read_end, 4096)
-        os.close(read_end)
+        os.close(exec_err_pipe_write)
+        exec_err_data = os.read(exec_err_pipe_read, 4096)
+        os.close(exec_err_pipe_read)
 
         # [issue #119] 6. The parent reads eof (a zero-length read) if the
         # child successfully performed exec, since close-on-exec made
@@ -281,8 +282,8 @@ class PtyProcess(object):
         # failed, the parent reads the error code and can proceed
         # accordingly. Either way, the parent blocks until the child calls
         # exec.
-        if len(data) != 0:
-            exception = OSError(data.decode('utf-8'))
+        if len(exec_err_data) != 0:
+            exception = OSError(exec_err_data.decode('utf-8', 'replace'))
             exception.errno = errno.ENOEXEC
             raise exception
 

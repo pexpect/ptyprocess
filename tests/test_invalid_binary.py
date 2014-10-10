@@ -36,9 +36,9 @@ class InvalidBinaryChars(unittest.TestCase):
         dirpath = tempfile.mkdtemp()
         fullpath = os.path.join(dirpath, "test")
 
-        test = os.open(fullpath, os.O_RDWR | os.O_CREAT)
-        os.write(test, os.urandom(1024)) # Contents shouldn't matter
-        os.close(test)
+        with open(fullpath, 'wb') as f:
+            f.write(os.urandom(1024)) # Contents shouldn't matter
+            f.close
 
         # Make it executable
         st = os.stat(fullpath)
@@ -49,20 +49,17 @@ class InvalidBinaryChars(unittest.TestCase):
             child = PtyProcess.spawn([fullpath])
             # If we get here then an OSError was not raised
             child.close()
-            os.unlink(fullpath)
-            os.rmdir(dirpath)
             raise AssertionError("OSError was not raised")
         except OSError as err:
             if errno.ENOEXEC == err.errno:
                 # This is what should happen
                 pass
             else:
-                os.unlink(fullpath)
-                os.rmdir(dirpath)
-                raise AssertionError("Wrong OSError raised")
-
-        os.unlink(fullpath)
-        os.rmdir(dirpath)
+                # Re-raise the original error to fail the test
+                raise
+        finally:
+            os.unlink(fullpath)
+            os.rmdir(dirpath)
 
 if __name__ == '__main__':
     unittest.main()
