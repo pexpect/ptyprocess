@@ -1,1 +1,1 @@
-from .ptyprocess import PtyProcess, PtyProcessUnicode
+from .ptyprocess import PtyProcess, PtyProcessUnicode, PtyProcessError
