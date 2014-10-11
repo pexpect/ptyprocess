@@ -256,7 +256,7 @@ class PtyProcess(object):
                 # [issue #119] 5. If exec fails, the child writes the error
                 # code back to the parent using the pipe, then exits.
                 errbytes = str(err).encode('utf-8') if PY3 else str(err)
-                os.write(exec_err_pipe_write, errbytes)
+                os.write(exec_err_pipe_write, struct.pack('i', err.errno) + errbytes)
                 os.close(exec_err_pipe_write)
                 os._exit(os.EX_OSERR)
 
@@ -283,8 +283,14 @@ class PtyProcess(object):
         # accordingly. Either way, the parent blocks until the child calls
         # exec.
         if len(exec_err_data) != 0:
-            exception = OSError(exec_err_data.decode('utf-8', 'replace'))
-            exception.errno = errno.ENOEXEC
+
+            exec_err_fmt = 'i'
+            exec_err_fmt_size = struct.calcsize(exec_err_fmt)
+            exec_err_errno = struct.unpack(exec_err_fmt, exec_err_data[:exec_err_fmt_size])[0]
+            exec_err_msg = exec_err_data[exec_err_fmt_size:]
+
+            exception = OSError(exec_err_msg.decode('utf-8', 'replace'))
+            exception.errno = exec_err_errno
             raise exception
 
         try:
