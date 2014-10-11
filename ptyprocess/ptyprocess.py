@@ -509,7 +509,7 @@ class PtyProcess(object):
         '''This sends a SIGINT to the child. It does not require
         the SIGINT to be the first character on a line. '''
 
-        self.fileobj.write(_EOF)
+        self.fileobj.write(_INTR)
 
     def eof(self):
         '''This returns True if the EOF exception was ever raised.
