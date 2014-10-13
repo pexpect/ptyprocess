@@ -195,6 +195,15 @@ class PtyProcess(object):
         command = command_with_path
         argv[0] = command
 
+        # [issue #119] To prevent the case where exec fails and the user is
+        # stuck interacting with a python child process instead of whatever
+        # was expected, we implement the solution from
+        # http://stackoverflow.com/a/3703179 to pass the exception to the
+        # parent process
+
+        # [issue #119] 1. Before forking, open a pipe in the parent process.
+        exec_err_pipe_read, exec_err_pipe_write = os.pipe()
+
         if use_native_pty_fork:
             pid, fd = pty.fork()
         else:
@@ -221,9 +230,16 @@ class PtyProcess(object):
                     if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                         raise
 
-            # Do not allow child to inherit open file descriptors from parent.
+            # [issue #119] 3. The child closes the reading end and sets the
+            # close-on-exec flag for the writing end.
+            os.close(exec_err_pipe_read)
+            fcntl.fcntl(exec_err_pipe_write, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
+
+            # Do not allow child to inherit open file descriptors from parent,
+            # with the exception of the exec_err_pipe_write of the pipe
             max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
-            os.closerange(3, max_fd)
+            os.closerange(3, exec_err_pipe_write)
+            os.closerange(exec_err_pipe_write+1, max_fd)
 
             if cwd is not None:
                 os.chdir(cwd)
@@ -231,10 +247,18 @@ class PtyProcess(object):
             for func in before_exec:
                 func()
 
-            if env is None:
-                os.execv(command, argv)
-            else:
-                os.execvpe(command, argv, env)
+            try:
+                if env is None:
+                    os.execv(command, argv)
+                else:
+                    os.execvpe(command, argv, env)
+            except OSError as err:
+                # [issue #119] 5. If exec fails, the child writes the error
+                # code back to the parent using the pipe, then exits.
+                errbytes = str(err).encode('utf-8') if PY3 else str(err)
+                os.write(exec_err_pipe_write, struct.pack('i', err.errno) + errbytes)
+                os.close(exec_err_pipe_write)
+                os._exit(os.EX_OSERR)
 
         # Parent
         inst = cls(pid, fd)
@@ -245,7 +269,30 @@ class PtyProcess(object):
             inst.env = env
         if cwd is not None:
             inst.launch_dir = cwd
-        
+
+        # [issue #119] 2. After forking, the parent closes the writing end
+        # of the pipe and reads from the reading end.
+        os.close(exec_err_pipe_write)
+        exec_err_data = os.read(exec_err_pipe_read, 4096)
+        os.close(exec_err_pipe_read)
+
+        # [issue #119] 6. The parent reads eof (a zero-length read) if the
+        # child successfully performed exec, since close-on-exec made
+        # successful exec close the writing end of the pipe. Or, if exec
+        # failed, the parent reads the error code and can proceed
+        # accordingly. Either way, the parent blocks until the child calls
+        # exec.
+        if len(exec_err_data) != 0:
+
+            exec_err_fmt = 'i'
+            exec_err_fmt_size = struct.calcsize(exec_err_fmt)
+            exec_err_errno = struct.unpack(exec_err_fmt, exec_err_data[:exec_err_fmt_size])[0]
+            exec_err_msg = exec_err_data[exec_err_fmt_size:]
+
+            exception = OSError(exec_err_msg.decode('utf-8', 'replace'))
+            exception.errno = exec_err_errno
+            raise exception
+
         try:
             inst.setwinsize(24, 80)
         except IOError as err:
