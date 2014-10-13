@@ -421,7 +421,10 @@ class PtyProcess(object):
         self.echo = state
 
     def read(self, size=1024):
-        """Read, and convert different platforms' EOF indications to EOFError.
+        """Read and return at most ``size`` bytes from the pty.
+
+        Can block if there is nothing to read. Raises :exc:`EOFError` if the
+        terminal was closed.
         
         Unlike Pexpect's ``read_nonblocking`` method, this doesn't try to deal
         with the vagaries of EOF on platforms that do strange things, like IRIX
@@ -445,6 +448,11 @@ class PtyProcess(object):
         return s
 
     def readline(self):
+        """Read one line from the pseudoterminal, and return it as unicode.
+
+        Can block if there is nothing to read. Raises :exc:`EOFError` if the
+        terminal was closed.
+        """
         try:
             s = self.fileobj.readline()
         except (OSError, IOError) as err:
@@ -461,10 +469,10 @@ class PtyProcess(object):
         return s
 
     def write(self, s):
-        '''Write data to the pseudoterminal.
+        """Write bytes to the pseudoterminal.
         
-        Returns the number of bytes/characters written.
-        '''
+        Returns the number of bytes written.
+        """
         return self.fileobj.write(s)
 
     def sendcontrol(self, char):
@@ -665,34 +673,42 @@ class PtyProcess(object):
         return False
 
     def kill(self, sig):
-        '''This sends the given signal to the child application. In keeping
-        with UNIX tradition it has a misleading name. It does not necessarily
-        kill the child unless you send the right signal. '''
+        """Send the given signal to the child application.
+
+        In keeping with UNIX tradition it has a misleading name. It does not
+        necessarily kill the child unless you send the right signal. See the
+        :mod:`signal` module for constants representing signal numbers.
+        """
 
         # Same as os.kill, but the pid is given for you.
         if self.isalive():
             os.kill(self.pid, sig)
 
     def getwinsize(self):
-        '''This returns the terminal window size of the child tty. The return
-        value is a tuple of (rows, cols). '''
-
+        """Return the window size of the pseudoterminal as a tuple (rows, cols).
+        """
         TIOCGWINSZ = getattr(termios, 'TIOCGWINSZ', 1074295912)
         s = struct.pack('HHHH', 0, 0, 0, 0)
         x = fcntl.ioctl(self.fd, TIOCGWINSZ, s)
         return struct.unpack('HHHH', x)[0:2]
 
     def setwinsize(self, rows, cols):
-        '''This sets the terminal window size of the child tty. This will cause
-        a SIGWINCH signal to be sent to the child. This does not change the
-        physical window size. It changes the size reported to TTY-aware
-        applications like vi or curses -- applications that respond to the
-        SIGWINCH signal. '''
+        """Set the terminal window size of the child tty.
 
+        This will cause a SIGWINCH signal to be sent to the child. This does not
+        change the physical window size. It changes the size reported to
+        TTY-aware applications like vi or curses -- applications that respond to
+        the SIGWINCH signal.
+        """
         return _setwinsize(self.fd, rows, cols)
 
 
 class PtyProcessUnicode(PtyProcess):
+    """Unicode wrapper around a process running in a pseudoterminal.
+
+    This class exposes a similar interface to :class:`PtyProcess`, but its read
+    methods return unicode, and its :meth:`write` accepts unicode.
+    """
     if PY3:
         string_type = str
     else:
@@ -705,13 +721,29 @@ class PtyProcessUnicode(PtyProcess):
         self.decoder = codecs.getincrementaldecoder(encoding)(errors=codec_errors)
 
     def read(self, size=1024):
+        """Read at most ``size`` bytes from the pty, return them as unicode.
+
+        Can block if there is nothing to read. Raises :exc:`EOFError` if the
+        terminal was closed.
+
+        The size argument still refers to bytes, not unicode code points.
+        """
         b = super(PtyProcessUnicode, self).read(size)
         return self.decoder.decode(b, final=False)
 
     def readline(self):
+        """Read one line from the pseudoterminal, and return it as unicode.
+
+        Can block if there is nothing to read. Raises :exc:`EOFError` if the
+        terminal was closed.
+        """
         b = super(PtyProcessUnicode, self).readline()
         return self.decoder.decode(b, final=False)
 
     def write(self, s):
+        """Write the unicode string ``s`` to the pseudoterminal.
+
+        Returns the number of bytes written.
+        """
         b = s.encode(self.encoding)
         return super(PtyProcessUnicode, self).write(b)
