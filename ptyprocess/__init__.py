@@ -1,3 +1,3 @@
 from .ptyprocess import PtyProcess, PtyProcessUnicode, PtyProcessError
 
-__version__ = '0.2'
+__version__ = '0.3'
