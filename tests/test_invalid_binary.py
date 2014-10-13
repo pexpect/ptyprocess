@@ -24,10 +24,7 @@ from ptyprocess import PtyProcess, PtyProcessUnicode
 import errno
 import os
 import stat
-import sys
 import tempfile
-
-PY3 = sys.version_info[0] >= 3
 
 class InvalidBinaryChars(unittest.TestCase):
 
@@ -45,10 +42,9 @@ class InvalidBinaryChars(unittest.TestCase):
             #  - Not 0x7FEF (ELF)
             #  - Not 0410 or 0413 (a.out)
             #  - Not 0x2321 (script)
-            file_start = str('\x00\x00').encode('utf-8') if PY3 else str('\x00\x00')
+            file_start = b'\x00\x00'
             file_data = file_start + os.urandom(1022)
             f.write(file_data)
-            f.flush()
 
         # Make it executable
         st = os.stat(fullpath)
