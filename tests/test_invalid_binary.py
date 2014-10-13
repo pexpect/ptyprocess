@@ -21,10 +21,13 @@ PEXPECT LICENSE
 import time
 import unittest
 from ptyprocess import PtyProcess, PtyProcessUnicode
+import errno
 import os
 import stat
+import sys
 import tempfile
-import errno
+
+PY3 = sys.version_info[0] >= 3
 
 class InvalidBinaryChars(unittest.TestCase):
 
@@ -37,8 +40,15 @@ class InvalidBinaryChars(unittest.TestCase):
         fullpath = os.path.join(dirpath, "test")
 
         with open(fullpath, 'wb') as f:
-            f.write(os.urandom(1024)) # Contents shouldn't matter
-            f.close
+            # Add some constant so it will never be executable
+            #  - Not 0x54AD (Windows PE)
+            #  - Not 0x7FEF (ELF)
+            #  - Not 0410 or 0413 (a.out)
+            #  - Not 0x2321 (script)
+            file_start = str('\x00\x00').encode('utf-8') if PY3 else str('\x00\x00')
+            file_data = file_start + os.urandom(1022)
+            f.write(file_data)
+            f.flush()
 
         # Make it executable
         st = os.stat(fullpath)
