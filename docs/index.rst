@@ -1,17 +1,14 @@
-.. Ptyprocess documentation master file, created by
-   sphinx-quickstart on Mon Oct 13 11:03:02 2014.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+Ptyprocess
+==========
 
-Welcome to Ptyprocess's documentation!
-======================================
+.. include:: ../README.rst
 
 Contents:
 
 .. toctree::
    :maxdepth: 2
 
-
+   api
 
 Indices and tables
 ==================

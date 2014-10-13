@@ -1,4 +1,5 @@
-Launch and control a process in a pseudo terminal
+Launch a subprocess in a pseudo terminal (pty), and interact with both the
+process and its pty.
 
 Sometimes, piping stdin and stdout is not enough. There might be a password
 prompt that doesn't read from stdin, output that changes when it's going to a
