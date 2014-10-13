@@ -533,10 +533,10 @@ class PtyProcess(object):
         '''
         char = char.lower()
         a = ord(char)
-        if a >= 97 and a <= 122:
+        if 97 <= a <= 122:
             a = a - ord('a') + 1
             byte = _byte(a)
-            return self.fileobj.write(_byte(a)), byte
+            return self.fileobj.write(byte), byte
         d = {'@': 0, '`': 0,
             '[': 27, '{': 27,
             '\\': 28, '|': 28,
@@ -545,9 +545,10 @@ class PtyProcess(object):
             '_': 31,
             '?': 127}
         if char not in d:
-            return 0
-        
-        return self.fileobj.write(_byte(d[char]))
+            return 0, b''
+
+        byte = _byte(d[char])
+        return self.fileobj.write(byte), byte
 
     def sendeof(self):
         '''This sends an EOF to the child. This sends a character which causes
