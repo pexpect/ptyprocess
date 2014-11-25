@@ -172,6 +172,12 @@ class PtyProcess(object):
         
         This does all the fork/exec type of stuff for a pty, and returns an
         instance of PtyProcess.
+
+        before_exec may be an iterable of functions, which will be called with
+        no arguments in the child process before exec-ing the specified command.
+        These may, for instance, set signal handlers to SIG_DFL or SIG_IGN.
+        Functions should take care to catch any exceptions that may occur, as
+        they are not currently handled outside the function.
         '''
         # Note that it is difficult for this method to fail.
         # You cannot detect if the child process cannot start.
