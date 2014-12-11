@@ -11,6 +11,11 @@ import sys
 import termios
 import time
 
+try:
+    import builtins  # Python 3
+except ImportError:
+    import __builtin__ as builtins  # Python 2
+
 # Constants
 from pty import (STDIN_FILENO, CHILD)
 
@@ -167,17 +172,15 @@ class PtyProcess(object):
         self.delayafterterminate = 0.1
 
     @classmethod
-    def spawn(cls, argv, cwd=None, env=None, echo=True, before_exec=()):
+    def spawn(cls, argv, cwd=None, env=None, echo=True, preexec_fn=None):
         '''Start the given command in a child process in a pseudo terminal.
         
         This does all the fork/exec type of stuff for a pty, and returns an
         instance of PtyProcess.
 
-        before_exec may be an iterable of functions, which will be called with
-        no arguments in the child process before exec-ing the specified command.
-        These may, for instance, set signal handlers to SIG_DFL or SIG_IGN.
-        Functions should take care to catch any exceptions that may occur, as
-        they are not currently handled outside the function.
+        If preexec_fn is supplied, it will be called with no arguments in the
+        child process before exec-ing the specified command.
+        It may, for instance, set signal handlers to SIG_DFL or SIG_IGN.
         '''
         # Note that it is difficult for this method to fail.
         # You cannot detect if the child process cannot start.
@@ -250,8 +253,18 @@ class PtyProcess(object):
             if cwd is not None:
                 os.chdir(cwd)
 
-            for func in before_exec:
-                func()
+            if preexec_fn is not None:
+                try:
+                    preexec_fn()
+                except Exception as e:
+                    ename = type(e).__name__
+                    tosend = '{}:0:{}'.format(ename, str(e))
+                    if PY3:
+                        tosend = tosend.encode('utf-8')
+
+                    os.write(exec_err_pipe_write, tosend)
+                    os.close(exec_err_pipe_write)
+                    os._exit(1)
 
             try:
                 if env is None:
@@ -261,8 +274,10 @@ class PtyProcess(object):
             except OSError as err:
                 # [issue #119] 5. If exec fails, the child writes the error
                 # code back to the parent using the pipe, then exits.
-                errbytes = str(err).encode('utf-8') if PY3 else str(err)
-                os.write(exec_err_pipe_write, struct.pack('i', err.errno) + errbytes)
+                tosend = 'OSError:{}:{}'.format(err.errno, str(err))
+                if PY3:
+                    tosend = tosend.encode('utf-8')
+                os.write(exec_err_pipe_write, tosend)
                 os.close(exec_err_pipe_write)
                 os._exit(os.EX_OSERR)
 
@@ -289,15 +304,18 @@ class PtyProcess(object):
         # accordingly. Either way, the parent blocks until the child calls
         # exec.
         if len(exec_err_data) != 0:
+            try:
+                errclass, errno_s, errmsg = exec_err_data.split(b':', 2)
+                exctype = getattr(builtins, errclass.decode('ascii'), Exception)
 
-            exec_err_fmt = 'i'
-            exec_err_fmt_size = struct.calcsize(exec_err_fmt)
-            exec_err_errno = struct.unpack(exec_err_fmt, exec_err_data[:exec_err_fmt_size])[0]
-            exec_err_msg = exec_err_data[exec_err_fmt_size:]
-
-            exception = OSError(exec_err_msg.decode('utf-8', 'replace'))
-            exception.errno = exec_err_errno
-            raise exception
+                exception = exctype(errmsg.decode('utf-8', 'replace'))
+                if exctype is OSError:
+                    exception.errno = int(errno_s)
+            except:
+                raise Exception('Subprocess failed, got bad error data: %r'
+                                    % exec_err_data)
+            else:
+                raise exception
 
         try:
             inst.setwinsize(24, 80)
