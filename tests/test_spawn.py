@@ -15,7 +15,7 @@ class PtyTestCase(unittest.TestCase):
         assert b'rebar' in response
         
         p.sendeof()
-        p.read()
+        p.readline()
         
         with self.assertRaises(EOFError):
             p.read()
@@ -31,7 +31,7 @@ class PtyTestCase(unittest.TestCase):
         assert u'rebar' in response
         
         p.sendeof()
-        p.read()
+        p.readline()
         
         with self.assertRaises(EOFError):
             p.read()
