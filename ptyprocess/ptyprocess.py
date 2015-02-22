@@ -24,7 +24,7 @@ from .util import which
 _platform = sys.platform.lower()
 
 # Solaris uses internal __fork_pty(). All others use pty.fork().
-_is_solaris = not (
+_is_solaris = (
     _platform.startswith('solaris') or
     _platform.startswith('sunos'))
 
