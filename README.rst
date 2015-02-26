@@ -9,7 +9,7 @@ If you need to automate these things, running the process in a pseudo terminal
 
 Interface::
 
-    p = PtyProcessUnicode.spawn(['python'])
+    p = PtyProcess.spawn(['python'])
     p.read(20)
-    p.write('6+6\n')
+    p.write(b'6+6\n')
     p.read(20)
