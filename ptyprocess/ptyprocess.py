@@ -123,6 +123,16 @@ def _setwinsize(fd, rows, cols):
     s = struct.pack('HHHH', rows, cols, 0, 0)
     fcntl.ioctl(fd, TIOCSWINSZ, s)
 
+class _NullCoder(object):
+    """Pass bytes through unchanged."""
+    @staticmethod
+    def encode(b, final=False):
+        return b
+
+    @staticmethod
+    def decode(b, final=False):
+        return b
+
 class PtyProcess(object):
     '''This class represents a process running in a pseudoterminal.
     
@@ -134,7 +144,7 @@ class PtyProcess(object):
     env = None
     launch_dir = None
 
-    def __init__(self, pid, fd):
+    def __init__(self, pid, fd, encoding=None, codec_errors='strict'):
         _make_eof_intr()  # Ensure _EOF and _INTR are calculated
         self.pid = pid
         self.fd = fd
@@ -154,16 +164,31 @@ class PtyProcess(object):
         # Time in seconds.
         self.delayafterterminate = 0.1
 
+        self.encoding = encoding
+        self.codec_errors = codec_errors
+        if encoding is None:
+            self.encoder = self.decoder = _NullCoder()
+        else:
+            self.encoder = codecs.getincrementalencoder(encoding)(errors=codec_errors)
+            self.decoder = codecs.getincrementaldecoder(encoding)(errors=codec_errors)
+
     @classmethod
-    def spawn(cls, argv, cwd=None, env=None, echo=True, preexec_fn=None):
+    def spawn(cls, argv, cwd=None, env=None, echo=True, preexec_fn=None,
+              encoding=None, codec_errors='strict'):
         '''Start the given command in a child process in a pseudo terminal.
-        
+
         This does all the fork/exec type of stuff for a pty, and returns an
         instance of PtyProcess.
 
         If preexec_fn is supplied, it will be called with no arguments in the
         child process before exec-ing the specified command.
         It may, for instance, set signal handlers to SIG_DFL or SIG_IGN.
+
+        If encoding is None (the default), reading and writing will return and
+        accept the raw bytes. If you pass the name of an encoding, e.g. 'utf-8',
+        you will read and write unicode: data written to the pty will be encoded,
+        and data read from it decoded. *codec_errors* determines how errors
+        are handled: common values are 'strict', 'replace' and 'ignore'.
         '''
         # Note that it is difficult for this method to fail.
         # You cannot detect if the child process cannot start.
@@ -265,7 +290,7 @@ class PtyProcess(object):
                 os._exit(os.EX_OSERR)
 
         # Parent
-        inst = cls(pid, fd)
+        inst = cls(pid, fd, encoding=encoding, codec_errors=codec_errors)
         
         # Set some informational attributes
         inst.argv = argv
@@ -499,7 +524,7 @@ class PtyProcess(object):
             self.flag_eof = True
             raise EOFError('End Of File (EOF). Empty string style platform.')
 
-        return s
+        return self.decoder.decode(s, final=False)
 
     def readline(self):
         """Read one line from the pseudoterminal, and return it as unicode.
@@ -520,14 +545,15 @@ class PtyProcess(object):
             self.flag_eof = True
             raise EOFError('End Of File (EOF). Empty string style platform.')
 
-        return s
+        return self.decoder.decode(s, final=False)
 
     def write(self, s):
         """Write bytes to the pseudoterminal.
         
         Returns the number of bytes written.
         """
-        return self.fileobj.write(s)
+        b = self.encoder.encode(s)
+        return self.fileobj.write(b)
 
     def sendcontrol(self, char):
         '''Helper method that wraps send() with mnemonic access for sending control
@@ -757,43 +783,16 @@ class PtyProcess(object):
         """
         return _setwinsize(self.fd, rows, cols)
 
+# Backwards compatibility:
 
-class PtyProcessUnicode(PtyProcess):
-    """Unicode wrapper around a process running in a pseudoterminal.
+def PtyProcessUnicode(pid, fd, encoding='utf-8', codec_errors='strict'):
+    """Deprecated: pass *encoding* to PtyProcess instead."""
+    return PtyProcess(pid, fd, encoding, codec_errors)
 
-    This class exposes a similar interface to :class:`PtyProcess`, but its read
-    methods return unicode, and its :meth:`write` accepts unicode.
-    """
-    def __init__(self, pid, fd, encoding='utf-8', codec_errors='strict'):
-        super(PtyProcessUnicode, self).__init__(pid, fd)
-        self.encoding = encoding
-        self.codec_errors = codec_errors
-        self.decoder = codecs.getincrementaldecoder(encoding)(errors=codec_errors)
+def _unicode_spawn(argv, cwd=None, env=None, echo=True, preexec_fn=None,
+                   encoding='utf-8', codec_errors='strict'):
+    """Deprecated: pass *encoding* to PtyProcess.spawn instead."""
+    return PtyProcess.spawn(argv, cwd, env, echo, preexec_fn,
+                            encoding, codec_errors)
 
-    def read(self, size=1024):
-        """Read at most ``size`` bytes from the pty, return them as unicode.
-
-        Can block if there is nothing to read. Raises :exc:`EOFError` if the
-        terminal was closed.
-
-        The size argument still refers to bytes, not unicode code points.
-        """
-        b = super(PtyProcessUnicode, self).read(size)
-        return self.decoder.decode(b, final=False)
-
-    def readline(self):
-        """Read one line from the pseudoterminal, and return it as unicode.
-
-        Can block if there is nothing to read. Raises :exc:`EOFError` if the
-        terminal was closed.
-        """
-        b = super(PtyProcessUnicode, self).readline()
-        return self.decoder.decode(b, final=False)
-
-    def write(self, s):
-        """Write the unicode string ``s`` to the pseudoterminal.
-
-        Returns the number of bytes written.
-        """
-        b = s.encode(self.encoding)
-        return super(PtyProcessUnicode, self).write(b)
+PtyProcessUnicode.spawn = _unicode_spawn
