@@ -7,4 +7,3 @@ Ptyprocess API
 
    .. automethod:: spawn
 
-.. autoclass:: PtyProcessUnicode
