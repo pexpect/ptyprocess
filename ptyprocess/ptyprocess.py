@@ -128,23 +128,6 @@ class PtyProcess(object):
     
     The main constructor is the :meth:`spawn` classmethod.
     '''
-    string_type = bytes
-    if PY3:
-        linesep = os.linesep.encode('ascii')
-        crlf = '\r\n'.encode('ascii')
-
-        @staticmethod
-        def write_to_stdout(b):
-            try:
-                return sys.stdout.buffer.write(b)
-            except AttributeError:
-                # If stdout has been replaced, it may not have .buffer
-                return sys.stdout.write(b.decode('ascii', 'replace'))
-    else:
-        linesep = os.linesep
-        crlf = '\r\n'
-        write_to_stdout = sys.stdout.write
-
     encoding = None
     
     argv = None
@@ -781,11 +764,6 @@ class PtyProcessUnicode(PtyProcess):
     This class exposes a similar interface to :class:`PtyProcess`, but its read
     methods return unicode, and its :meth:`write` accepts unicode.
     """
-    if PY3:
-        string_type = str
-    else:
-        string_type = unicode   # analysis:ignore
-
     def __init__(self, pid, fd, encoding='utf-8', codec_errors='strict'):
         super(PtyProcessUnicode, self).__init__(pid, fd)
         self.encoding = encoding
