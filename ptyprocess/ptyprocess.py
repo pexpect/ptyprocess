@@ -172,15 +172,20 @@ class PtyProcess(object):
         self.delayafterterminate = 0.1
 
     @classmethod
-    def spawn(cls, argv, cwd=None, env=None, echo=True, preexec_fn=None):
+    def spawn(
+            cls, argv, cwd=None, env=None, echo=True, preexec_fn=None,
+            dimensions=(24, 80)):
         '''Start the given command in a child process in a pseudo terminal.
-        
+
         This does all the fork/exec type of stuff for a pty, and returns an
         instance of PtyProcess.
 
         If preexec_fn is supplied, it will be called with no arguments in the
         child process before exec-ing the specified command.
         It may, for instance, set signal handlers to SIG_DFL or SIG_IGN.
+
+        Dimensions of the psuedoterminal used for the subprocess can be
+        specified as a tuple, or the default (24, 80) will be used.
         '''
         # Note that it is difficult for this method to fail.
         # You cannot detect if the child process cannot start.
@@ -224,9 +229,9 @@ class PtyProcess(object):
         # allowing IOError for either.
 
         if pid == CHILD:
-            # set default window size of 24 rows by 80 columns
+            # set window size
             try:
-                _setwinsize(STDIN_FILENO, 24, 80)
+                _setwinsize(STDIN_FILENO, *dimensions)
             except IOError as err:
                 if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                     raise
