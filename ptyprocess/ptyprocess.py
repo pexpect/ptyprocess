@@ -323,7 +323,7 @@ class PtyProcess(object):
                 raise exception
 
         try:
-            inst.setwinsize(24, 80)
+            inst.setwinsize(*dimensions)
         except IOError as err:
             if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                 raise
