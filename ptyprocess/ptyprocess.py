@@ -185,7 +185,7 @@ class PtyProcess(object):
         It may, for instance, set signal handlers to SIG_DFL or SIG_IGN.
 
         Dimensions of the psuedoterminal used for the subprocess can be
-        specified as a tuple, or the default (24, 80) will be used.
+        specified as a tuple (rows, cols), or the default (24, 80) will be used.
         '''
         # Note that it is difficult for this method to fail.
         # You cannot detect if the child process cannot start.
