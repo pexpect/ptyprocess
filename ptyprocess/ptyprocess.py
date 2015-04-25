@@ -68,7 +68,13 @@ def _make_eof_intr():
             # ValueError: I/O operation on closed file
             fd = sys.__stdout__.fileno()
         intr = ord(termios.tcgetattr(fd)[6][VINTR])
-        eof = ord(termios.tcgetattr(fd)[6][VEOF])
+        eof_val = termios.tcgetattr(fd)[6][VEOF]
+        if _is_solaris and isinstance(eof_val, int):
+            # very strange, on Solaris 11.2-provided python2.6,
+            # eof_val is an integer (1), not a string ('\x04').
+            eof = 4
+        else:
+            eof = ord(eof_val)
     except (ImportError, OSError, IOError, ValueError, termios.error):
         # unless the controlling process is also not a terminal,
         # such as cron(1), or when stdin and stdout are both closed.
@@ -263,7 +269,7 @@ class PtyProcess(object):
                     preexec_fn()
                 except Exception as e:
                     ename = type(e).__name__
-                    tosend = '{}:0:{}'.format(ename, str(e))
+                    tosend = '{0}:0:{1}'.format(ename, str(e))
                     if PY3:
                         tosend = tosend.encode('utf-8')
 
@@ -279,7 +285,7 @@ class PtyProcess(object):
             except OSError as err:
                 # [issue #119] 5. If exec fails, the child writes the error
                 # code back to the parent using the pipe, then exits.
-                tosend = 'OSError:{}:{}'.format(err.errno, str(err))
+                tosend = 'OSError:{0}:{1}'.format(err.errno, str(err))
                 if PY3:
                     tosend = tosend.encode('utf-8')
                 os.write(exec_err_pipe_write, tosend)
@@ -325,7 +331,7 @@ class PtyProcess(object):
         try:
             inst.setwinsize(*dimensions)
         except IOError as err:
-            if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
+            if err.args[0] not in (errno.EINVAL, errno.ENOTTY, errno.ENXIO):
                 raise
 
         return inst
@@ -339,10 +345,10 @@ class PtyProcess(object):
             if self.launch_dir is not None:
                 args.append("cwd=%r" % self.launch_dir)
             
-            return "{}.spawn({})".format(clsname, ", ".join(args))
+            return "{0}.spawn({1})".format(clsname, ", ".join(args))
         
         else:
-            return "{}(pid={}, fd={})".format(clsname, self.pid, self.fd)
+            return "{0}(pid={1}, fd={2})".format(clsname, self.pid, self.fd)
 
     @staticmethod
     def _coerce_send_string(s):
