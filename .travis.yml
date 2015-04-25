@@ -7,3 +7,6 @@ python:
 before_script: pip install -rrequirements-testing.txt
 # command to run tests
 script: py.test
+
+# faster builds on travis-ci
+sudo: False
