@@ -19,14 +19,14 @@ PEXPECT LICENSE
 
 '''
 import time
-import unittest
+import unittest, unittest2
 from ptyprocess import PtyProcess, PtyProcessUnicode
 import errno
 import os
 import stat
 import tempfile
 
-class InvalidBinaryChars(unittest.TestCase):
+class InvalidBinaryChars(unittest2.TestCase):
 
     def test_invalid_binary(self):
         '''This tests that we correctly handle the case where we attempt to
@@ -67,8 +67,8 @@ class InvalidBinaryChars(unittest.TestCase):
             os.unlink(fullpath)
             os.rmdir(dirpath)
 
+
 if __name__ == '__main__':
     unittest.main()
 
 suite = unittest.makeSuite(InvalidBinaryChars,'test')
-

@@ -1,9 +1,10 @@
+#!/usr/bin/env python
 import os
 import time
-import unittest
+import unittest, unittest2
 from ptyprocess import PtyProcess, PtyProcessUnicode
 
-class PtyTestCase(unittest.TestCase):
+class PtyTestCase(unittest2.TestCase):
     def test_spawn_sh(self):
         env = os.environ.copy()
         env['FOO'] = 'rebar'
@@ -35,3 +36,15 @@ class PtyTestCase(unittest.TestCase):
         
         with self.assertRaises(EOFError):
             p.read()
+
+    def test_quick_spawn(self):
+        """Spawn a very short-lived process."""
+        # so far only reproducable on Solaris 11, spawning a process
+        # that exits very quickly raised an exception at 'inst.setwinsize',
+        # because the pty filedes was quickly lost after exec().
+        PtyProcess.spawn(['/bin/true'])
+
+if __name__ == '__main__':
+    unittest.main()
+
+suite = unittest.makeSuite(PtyTestCase, 'test')
