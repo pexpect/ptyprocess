@@ -6,7 +6,7 @@ with open('README.rst') as f:
     readme = f.read()
 
 setup(name='ptyprocess',
-      version='0.4',
+      version='0.5',
       description="Run a subprocess in a pseudo terminal",
       long_description=readme,
       author='Thomas Kluyver',
