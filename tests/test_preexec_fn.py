@@ -18,13 +18,21 @@ PEXPECT LICENSE
     OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 '''
-import unittest
+import unittest, unittest2
 import shutil
 from ptyprocess import PtyProcess
 import os
 import tempfile
 
-class PreexecFns(unittest.TestCase):
+class PreexecFns(unittest2.TestCase):
+    def setUp(self):
+        self.pid = os.getpid()
+
+    def tearDown(self):
+        if self.pid != os.getpid():
+            sys.stderr.write('\nERROR: Test runner has forked! Exiting!\n')
+            os._exit(1)
+
     def test_preexec(self):
         td = tempfile.mkdtemp()
         filepath = os.path.join(td, 'foo')
@@ -56,3 +64,7 @@ class PreexecFns(unittest.TestCase):
                 raise
 
 
+if __name__ == '__main__':
+    unittest.main()
+
+suite = unittest.makeSuite(PreexecFns, 'test')
