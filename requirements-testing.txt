@@ -1,0 +1,3 @@
+# unittest2 is a backport of the new features in Python 2.7 and onwards.
+# we use this for python2.6, such as "with self.assertRaises(..)"
+unittest2
