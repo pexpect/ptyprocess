@@ -40,5 +40,5 @@ class PtyTestCase(unittest.TestCase):
         """Spawn a very short-lived process."""
         # so far only reproducable on Solaris 11, spawning a process
         # that exits very quickly raised an exception at 'inst.setwinsize',
-        # because the pty filedes was quickly lost after exec().
+        # because the pty file descriptor was quickly lost after exec().
         PtyProcess.spawn(['/bin/true'])
