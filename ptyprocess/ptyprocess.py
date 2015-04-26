@@ -653,7 +653,7 @@ class PtyProcess(object):
         if self.isalive():
             pid, status = os.waitpid(self.pid, 0)
         else:
-            raise PtyProcessError('Cannot wait for dead child process.')
+            return self.exitstatus
         self.exitstatus = os.WEXITSTATUS(status)
         if os.WIFEXITED(status):
             self.status = status
