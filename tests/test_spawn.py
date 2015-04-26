@@ -1,10 +1,9 @@
-#!/usr/bin/env python
 import os
 import time
-import unittest, unittest2
+import unittest
 from ptyprocess import PtyProcess, PtyProcessUnicode
 
-class PtyTestCase(unittest2.TestCase):
+class PtyTestCase(unittest.TestCase):
     def test_spawn_sh(self):
         env = os.environ.copy()
         env['FOO'] = 'rebar'
@@ -43,8 +42,3 @@ class PtyTestCase(unittest2.TestCase):
         # that exits very quickly raised an exception at 'inst.setwinsize',
         # because the pty filedes was quickly lost after exec().
         PtyProcess.spawn(['/bin/true'])
-
-if __name__ == '__main__':
-    unittest.main()
-
-suite = unittest.makeSuite(PtyTestCase, 'test')
