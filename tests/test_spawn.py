@@ -35,3 +35,10 @@ class PtyTestCase(unittest.TestCase):
         
         with self.assertRaises(EOFError):
             p.read()
+
+    def test_quick_spawn(self):
+        """Spawn a very short-lived process."""
+        # so far only reproducable on Solaris 11, spawning a process
+        # that exits very quickly raised an exception at 'inst.setwinsize',
+        # because the pty file descriptor was quickly lost after exec().
+        PtyProcess.spawn(['/bin/true'])
