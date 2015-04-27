@@ -412,7 +412,7 @@ class PtyProcess(object):
 
         return os.isatty(self.fd)
 
-    def waitnoecho(self, timeout=-1):
+    def waitnoecho(self, timeout=None):
         '''This waits until the terminal ECHO flag is set False. This returns
         True if the echo mode is off. This returns False if the ECHO flag was
         not set False before the timeout. This can be used to detect when the
@@ -425,12 +425,9 @@ class PtyProcess(object):
             p.waitnoecho()
             p.sendline(mypassword)
 
-        If timeout==-1 then this method will use the value in self.timeout.
         If timeout==None then this method to block until ECHO flag is False.
         '''
 
-        if timeout == -1:
-            timeout = self.timeout
         if timeout is not None:
             end_time = time.time() + timeout
         while True:
