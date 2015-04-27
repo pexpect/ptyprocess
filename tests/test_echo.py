@@ -28,7 +28,7 @@ class PtyEchoTestCase(unittest.TestCase):
         # make a prompt we can expect,
         time.sleep(1)
         assert att_sh.getecho() == True
-        att_sh.write('export PS1="IN: "\n')
+        att_sh.write(b'export PS1="IN: "\n')
 
         # we must exhaust all awaiting input.  The terminal attributes made by
         # setecho() are not understood by getecho() until all awaiting
@@ -45,13 +45,13 @@ class PtyEchoTestCase(unittest.TestCase):
         # we use stty(1) to set echo. By doing so, we can be assured that
         # waitnoecho() will return True even after a short duration (and after
         # all of our output has been read.)
-        att_sh.write('stty echo\n')
+        att_sh.write(b'stty echo\n')
         while not inp == 'IN: ':
              inp = att_sh.read().strip('\r\n')
              print(inp)
         assert att_sh.waitnoecho(timeout=3) == True
         assert att_sh.getecho() == False
 
-        att_sh.write('exit 0\n')
+        att_sh.write(b'exit 0\n')
         self._read_until_eof(att_sh)
         assert att_sh.wait() == 0
