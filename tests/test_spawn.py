@@ -28,12 +28,6 @@ class PtyTestCase(unittest.TestCase):
             except EOFError:
                 break
 
-        # verify, read after EOF keeps throwing EOF
-        with self.assertRaises(EOFError):
-            p.read()
-        with self.assertRaises(EOFError):
-            p.readline()
-
         # verify, input is echo to output
         assert cmd.strip() in outp
 
@@ -61,7 +55,7 @@ class PtyTestCase(unittest.TestCase):
         # because the pty file descriptor was quickly lost after exec().
         PtyProcess.spawn(['true'])
 
-    def _interactive_repl(self, echo):
+    def _interactive_repl_unicode(self, echo):
         """Test Call and response in proc.readline(), echo OFF."""
         # given,
         bc = PtyProcessUnicode.spawn(['bc'], echo=echo)
@@ -76,31 +70,26 @@ class PtyTestCase(unittest.TestCase):
 
         bc.write(u'2^16\n')
         outp = u''
-        while self._canread(bc.fd) and not u'65536' in outp:
+        while self._canread(bc.fd):
             outp += bc.read()
         assert u'65536' in outp
-
-        # ensure terminal echo reflects our requested settings
-        if echo == False:
-            bc.setecho(echo)
-            assert bc.waitnoecho(timeout=3) == True
-            assert bc.getecho() == False
 
         # exercise,
         bc.write(given_input)
 
-        # TODO: We're seeing our input on output on FreeBSD with
-        # echo=False, and when echo=True, .getecho() returns False.
-        # This might be another case of 'setecho not supported on
-        # this platform'??
+        while self._canread(bc.fd, timeout=2):
+            outp += bc.read()
 
+        # with echo ON, we should see our input.
+        #
+        # note: we cannot assert the reverse: on Solaris, FreeBSD,
+        # and OSX, our input is echoed to output even with echo=False,
+        # something to do with the non-gnu version of bc(1), perhaps.
         if echo:
-           # validate input echoed to output.  This is where
-           # the '_echo' TestCase differs from the previous
-           # '_noecho' varient.
-           assert bc.readline().strip() == given_input.strip()
+            assert given_input.strip() in outp
 
-        assert bc.readline().strip() == expected_output
+        # we should most certainly see the result output.
+        assert expected_output in outp
 
         # exercise sending EOF
         bc.sendeof()
@@ -117,8 +106,8 @@ class PtyTestCase(unittest.TestCase):
 
     @unittest.skipIf(which('bc') is None, "bc(1) not found on this server.")
     def test_interactive_repl_unicode_noecho(self):
-        self._interactive_repl(echo=False)
+        self._interactive_repl_unicode(echo=False)
 
     @unittest.skipIf(which('bc') is None, "bc(1) not found on this server.")
     def test_interactive_repl_unicode_echo(self):
-        self._interactive_repl(echo=True)
+        self._interactive_repl_unicode(echo=True)
