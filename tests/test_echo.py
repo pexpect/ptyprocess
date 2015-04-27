@@ -28,6 +28,7 @@ class PtyEchoTestCase(unittest.TestCase):
         # make a prompt we can expect,
         time.sleep(1)
         assert att_sh.getecho() == True
+        assert att_sh.waitnoecho(timeout=1) == False
         att_sh.write(b'export PS1="IN: "\n')
 
         # we must exhaust all awaiting input.  The terminal attributes made by
@@ -49,7 +50,7 @@ class PtyEchoTestCase(unittest.TestCase):
         while not inp == b'IN: ':
              inp = att_sh.read().strip('\r\n')
              print(inp)
-        assert att_sh.waitnoecho(timeout=3) == True
+        assert att_sh.waitnoecho(timeout=3) == False
         assert att_sh.getecho() == False
 
         att_sh.write(b'exit 0\n')
