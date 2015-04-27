@@ -4,4 +4,4 @@ python:
   - "3.3"
   - "3.4"
 # command to run tests
-script: py.test
+script: py.test --verbose --verbose
