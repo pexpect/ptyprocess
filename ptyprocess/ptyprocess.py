@@ -28,8 +28,6 @@ _is_solaris = (
     _platform.startswith('solaris') or
     _platform.startswith('sunos'))
 
-_is_irix = _platform.startswith('irix')
-
 if _is_solaris:
     use_native_pty_fork = False
     from . import _fork_pty

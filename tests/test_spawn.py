@@ -1,8 +1,8 @@
 import os
 import time
+import select
 import unittest
 from ptyprocess import PtyProcess, PtyProcessUnicode
-from ptyprocess.ptyprocess import which
 
 class PtyTestCase(unittest.TestCase):
     def setUp(self):
@@ -12,9 +12,12 @@ class PtyTestCase(unittest.TestCase):
         self.env_value = u'env_value'
         self.env[self.env_key] = self.env_value
 
-    def _spawn_sh(self, ptyprocess, cmd, outp):
+    def _canread(self, fd, timeout=1):
+        return fd in select.select([fd], [], [], timeout)[0]
+
+    def _spawn_sh(self, ptyp, cmd, outp):
         # given,
-        p = ptyprocess.spawn(['sh'], env=self.env)
+        p = ptyp.spawn(['sh'], env=self.env)
         p.write(cmd)
 
         # exercise,
@@ -59,6 +62,8 @@ class PtyTestCase(unittest.TestCase):
         """Test Call and response in proc.readline(), echo OFF."""
         # given,
         bc = PtyProcessUnicode.spawn(['bc'], echo=echo)
+	given_input = u'2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2\n'
+        expected_output = u'40'
 
         # gnu-bc will display a long FSF banner on startup,
         # whereas bsd-bc (on FreeBSD, Solaris) display no
@@ -68,14 +73,15 @@ class PtyTestCase(unittest.TestCase):
 
         bc.write(u'2^16\n')
         outp = u''
-        while not u'65536' in outp:
-            outp += bc.readline()
-
-	given_input = u'2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2\n'
-        expected_output = u'40'
+        while self._canread(bc.fd) and not u'65536' in outp:
+            outp += bc.read()
+        assert '65536' in outp
 
         # ensure terminal echo reflects our requested settings
-        assert bc.getecho() == echo
+        if echo == False:
+            bc.setecho(echo)
+            assert bc.waitnoecho(timeout=3) == True
+            assert bc.getecho() == False
 
         # exercise,
         bc.write(given_input)
