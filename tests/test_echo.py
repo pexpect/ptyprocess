@@ -1,5 +1,6 @@
 import time
 import unittest
+from ptyprocess.ptyprocess import _is_solaris
 from ptyprocess import PtyProcess
 
 class PtyEchoTestCase(unittest.TestCase):
@@ -12,6 +13,7 @@ class PtyEchoTestCase(unittest.TestCase):
             except EOFError:
                 return
 
+    @unittest.skipIf(_is_solaris, "waitnoecho cannot be called on this platform.")
     def test_waitnoecho_forever(self):
         """Ensure waitnoecho() with no timeout will return when echo=False."""
         cat = PtyProcess.spawn(['cat'], echo=False)
@@ -22,6 +24,7 @@ class PtyEchoTestCase(unittest.TestCase):
         self._read_until_eof(cat)
         assert cat.wait() == 0
 
+    @unittest.skipIf(_is_solaris, "waitnoecho cannot be called on this platform.")
     def test_waitnoecho_timeout(self):
         """Ensure waitnoecho() with timeout will return when using stty to unset echo."""
         cat = PtyProcess.spawn(['cat'], echo=True)
