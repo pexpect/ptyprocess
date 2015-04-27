@@ -62,7 +62,7 @@ class PtyTestCase(unittest.TestCase):
         """Test Call and response in proc.readline(), echo OFF."""
         # given,
         bc = PtyProcessUnicode.spawn(['bc'], echo=echo)
-	given_input = u'2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2\n'
+        given_input = u'2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2\n'
         expected_output = u'40'
 
         # gnu-bc will display a long FSF banner on startup,
@@ -75,7 +75,7 @@ class PtyTestCase(unittest.TestCase):
         outp = u''
         while self._canread(bc.fd) and not u'65536' in outp:
             outp += bc.read()
-        assert '65536' in outp
+        assert u'65536' in outp
 
         # ensure terminal echo reflects our requested settings
         if echo == False:
