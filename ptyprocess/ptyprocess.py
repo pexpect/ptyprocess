@@ -426,6 +426,9 @@ class PtyProcess(object):
             p.sendline(mypassword)
 
         If timeout==None then this method to block until ECHO flag is False.
+
+        .. note:: all waiting output must be :meth:`~.read` before the ECHO
+           mode of the pty may be determined.
         '''
 
         if timeout is not None:
