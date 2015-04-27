@@ -56,7 +56,7 @@ class PtyTestCase(unittest.TestCase):
         PtyProcess.spawn(['true'])
 
     def _interactive_repl_unicode(self, echo):
-        """Test Call and response in proc.readline(), echo OFF."""
+        """Test Call and response with echo ON/OFF."""
         # given,
         bc = PtyProcessUnicode.spawn(['bc'], echo=echo)
         given_input = u'2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2+2\n'
@@ -97,7 +97,7 @@ class PtyTestCase(unittest.TestCase):
         # validate EOF on read
         while True:
             try:
-                bc.readline()
+                bc.read()
             except EOFError:
                 break
 
