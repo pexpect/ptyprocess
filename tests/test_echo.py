@@ -37,16 +37,16 @@ class PtyEchoTestCase(unittest.TestCase):
         #
         # Furthermore, with stdout line-buffered, we can expect .read() to
         # return full lines.
-        inp = u''
-        while not inp == 'IN: ':
-             inp = att_sh.read().strip('\r\n')
+        inp = b''
+        while not inp == b'IN: ':
+             inp = att_sh.read().strip(b'\r\n')
              print(inp)
 
         # we use stty(1) to set echo. By doing so, we can be assured that
         # waitnoecho() will return True even after a short duration (and after
         # all of our output has been read.)
         att_sh.write(b'stty echo\n')
-        while not inp == 'IN: ':
+        while not inp == b'IN: ':
              inp = att_sh.read().strip('\r\n')
              print(inp)
         assert att_sh.waitnoecho(timeout=3) == True
