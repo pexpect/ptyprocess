@@ -2,6 +2,7 @@ import os
 import time
 import select
 import unittest
+from ptyprocess.ptyprocess import which
 from ptyprocess import PtyProcess, PtyProcessUnicode
 
 class PtyTestCase(unittest.TestCase):
@@ -15,7 +16,7 @@ class PtyTestCase(unittest.TestCase):
     def _canread(self, fd, timeout=1):
         return fd in select.select([fd], [], [], timeout)[0]
 
-    def _spawn_sh(self, ptyp, cmd, outp):
+    def _spawn_sh(self, ptyp, cmd, outp, env_value):
         # given,
         p = ptyp.spawn(['sh'], env=self.env)
         p.write(cmd)
@@ -34,10 +35,10 @@ class PtyTestCase(unittest.TestCase):
             p.readline()
 
         # verify, input is echo to output
-        assert self.cmd.strip() in outp
+        assert cmd.strip() in outp
 
         # result of echo $ENV_KEY in output
-        assert self.env_value in outp
+        assert env_value in outp
 
         # exit succesfully (exit 0)
         assert p.wait() == 0
@@ -45,11 +46,13 @@ class PtyTestCase(unittest.TestCase):
 
     def test_spawn_sh(self):
         outp = b''
-        self._spawn_sh(PtyProcess, self.cmd.encode('ascii'), outp)
+        self._spawn_sh(PtyProcess, self.cmd.encode('ascii'),
+                       outp, self.env_value.encode('ascii'))
 
     def test_spawn_sh_unicode(self):
         outp = u''
-        self._spawn_sh(PtyProcessUnicode, self.cmd, outp)
+        self._spawn_sh(PtyProcessUnicode, self.cmd,
+                       outp, self.env_value)
 
     def test_quick_spawn(self):
         """Spawn a very short-lived process."""
@@ -112,8 +115,10 @@ class PtyTestCase(unittest.TestCase):
         # validate exit status,
         assert bc.wait() == 0
 
+    @unittest.skipIf(which('bc') is None, "bc(1) not found on this server.")
     def test_interactive_repl_unicode_noecho(self):
         self._interactive_repl(echo=False)
 
+    @unittest.skipIf(which('bc') is None, "bc(1) not found on this server.")
     def test_interactive_repl_unicode_echo(self):
         self._interactive_repl(echo=True)
