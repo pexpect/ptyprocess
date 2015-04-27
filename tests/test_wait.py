@@ -19,7 +19,7 @@ class TestWaitAfterTermination(unittest.TestCase):
         child = PtyProcess.spawn(['false'])
         # Wait so we're reasonable sure /bin/false has terminated
         time.sleep(0.2)
-        self.assertEqual(child.wait(), 1)
+        self.assertNotEqual(child.wait(), 0)
 
     def test_wait_twice_longproc(self):
         """Ensure correct wait status when called twice."""
