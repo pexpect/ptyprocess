@@ -55,7 +55,7 @@ def _make_eof_intr():
     """
     global _EOF, _INTR
     if (_EOF is not None) and (_INTR is not None):
-        pass
+        return
 
     # inherit EOF and INTR definitions from controlling process.
     try:
