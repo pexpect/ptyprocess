@@ -19,7 +19,13 @@ PEXPECT LICENSE
 
 '''
 import time
-import unittest
+import sys
+
+if sys.version_info >= (2, 7):
+    import unittest
+else:
+    import unittest2 as unittest
+
 from ptyprocess import PtyProcess, PtyProcessUnicode
 import errno
 import os
