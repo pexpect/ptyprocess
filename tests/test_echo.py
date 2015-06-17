@@ -1,5 +1,11 @@
 import time
-import unittest
+import sys
+
+if sys.version_info >= (2, 7):
+    import unittest
+else:
+    import unittest2 as unittest
+
 from ptyprocess.ptyprocess import _is_solaris
 from ptyprocess import PtyProcess
 

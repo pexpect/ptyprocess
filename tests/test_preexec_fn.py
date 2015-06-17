@@ -18,7 +18,13 @@ PEXPECT LICENSE
     OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 '''
-import unittest
+import sys
+
+if sys.version_info >= (2, 7):
+    import unittest
+else:
+    import unittest2 as unittest
+
 import shutil
 from ptyprocess import PtyProcess
 import os

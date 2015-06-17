@@ -6,8 +6,8 @@ from distutils.core import setup
 with open('README.rst') as f:
     readme = f.read()
 
-assert sys.version_info >= (2, 7), (
-    "Only python 2.7 and later is supported by ptyprocess.")
+assert sys.version_info >= (2, 6), (
+    "Only python 2.6 and later is supported by ptyprocess.")
 
 setup(name='ptyprocess',
       version='0.5',
