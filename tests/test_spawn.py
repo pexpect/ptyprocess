@@ -34,7 +34,7 @@ class PtyTestCase(unittest.TestCase):
         # result of echo $ENV_KEY in output
         assert env_value in outp
 
-        # exit succesfully (exit 0)
+        # exit successfully (exit 0)
         assert p.wait() == 0
 
 
@@ -50,7 +50,7 @@ class PtyTestCase(unittest.TestCase):
 
     def test_quick_spawn(self):
         """Spawn a very short-lived process."""
-        # so far only reproducable on Solaris 11, spawning a process
+        # so far only reproducible on Solaris 11, spawning a process
         # that exits very quickly raised an exception at 'inst.setwinsize',
         # because the pty file descriptor was quickly lost after exec().
         PtyProcess.spawn(['true'])

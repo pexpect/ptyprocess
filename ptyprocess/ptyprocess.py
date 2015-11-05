@@ -365,7 +365,7 @@ class PtyProcess(object):
             # trigger an exception because os.close may be None.
             try:
                 self.close()
-            # which exception, shouldnt' we catch explicitly .. ?
+            # which exception, shouldn't we catch explicitly .. ?
             except:
                 pass
 
