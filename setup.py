@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import sys
-from distutils.core import setup
+from setuptools import setup
 
 with open('README.rst') as f:
     readme = f.read()
