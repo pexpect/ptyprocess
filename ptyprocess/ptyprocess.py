@@ -699,10 +699,25 @@ class PtyProcess(object):
         except OSError as e:
             # No child processes
             if e.errno == errno.ECHILD:
-                raise PtyProcessError('isalive() encountered condition ' +
-                        'where "terminated" is 0, but there was no child ' +
-                        'process. Did someone else call waitpid() ' +
-                        'on our process?')
+                try:
+                    os.kill(self.pid, 0)
+                except OSError as err:
+                    if err.errno == errno.ESRCH:
+                        # No such process
+                        raise PtyProcessError('isalive() encountered condition ' +
+                                'where "terminated" is 0, but there was no child ' +
+                                'process. Did someone else call waitpid() ' +
+                                'on our process?')
+                    elif err.errno == errno.EPERM:
+                        # Process deny access
+                        raise PtyProcessError('isalive() encountered condition ' +
+                                'where the child process deny access')
+                    else:
+                        # Other possible error
+                        raise err
+                else:
+                    # Process exists not as child
+                    pid, status = 0, 0
             else:
                 raise
 
@@ -717,10 +732,25 @@ class PtyProcess(object):
             except OSError as e:  # pragma: no cover
                 # This should never happen...
                 if e.errno == errno.ECHILD:
-                    raise PtyProcessError('isalive() encountered condition ' +
-                            'that should never happen. There was no child ' +
-                            'process. Did someone else call waitpid() ' +
-                            'on our process?')
+                    try:
+                        os.kill(self.pid, 0)
+                    except OSError as err:
+                        if err.errno == errno.ESRCH:
+                            # No such process
+                            raise PtyProcessError('isalive() encountered condition ' +
+                                    'where "terminated" is 0, but there was no child ' +
+                                    'process. Did someone else call waitpid() ' +
+                                    'on our process?')
+                        elif err.errno == errno.EPERM:
+                            # Process deny access
+                            raise PtyProcessError('isalive() encountered condition ' +
+                                    'where the child process deny access')
+                        else:
+                            # Other possible error
+                            raise err
+                    else:
+                        # Process exists not as child
+                        pid, status = 0, 0
                 else:
                     raise
 
