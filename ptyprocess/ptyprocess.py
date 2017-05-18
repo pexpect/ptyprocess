@@ -732,8 +732,17 @@ class PtyProcess(object):
                     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
                     SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                     """
+                    os.kill(self.pid, 0)
                     if sys.platform.startswith("linux"):
-                        os.kill(self.pid, 0)
+                        with open("/proc/%s/stat" % (self.pid), "rb") as f:
+                            data = f.read()
+                            rpar = data.rfind(b')')
+                            name = data[data.find(b'(') + 1:rpar]
+                            fields_after_name = data[rpar + 2:].split()
+                            if fields_after_name[0] == "Z":
+                                raise PtyProcessError('isalive() encountered condition ' +
+                                                    'where the child process becomes a zombie process.' + 
+                                                    ' Does other process kill the ptyprocess?')
                     elif sys.platform.startswith("darwin"):
                         pass
                     elif sys.platform.startswith("freebsd"):
@@ -807,8 +816,17 @@ class PtyProcess(object):
                         (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
                         SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                         """
+                        os.kill(self.pid, 0)
                         if sys.platform.startswith("linux"):
-                            os.kill(self.pid, 0)
+                            with open("/proc/%s/stat" % (self.pid), "rb") as f:
+                                data = f.read()
+                                rpar = data.rfind(b')')
+                                name = data[data.find(b'(') + 1:rpar]
+                                fields_after_name = data[rpar + 2:].split()
+                                if fields_after_name[0] == "Z":
+                                    raise PtyProcessError('isalive() encountered condition ' +
+                                                        'where the child process becomes a zombie process.' + 
+                                                        ' Does other process kill the ptyprocess?')
                         elif sys.platform.startswith("darwin"):
                             pass
                         elif sys.platform.startswith("freebsd"):
