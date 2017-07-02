@@ -251,7 +251,10 @@ class PtyProcess(object):
 
             # Do not allow child to inherit open file descriptors from parent,
             # with the exception of the exec_err_pipe_write of the pipe
-            max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+            # Impose ceiling on max_fd: AIX bugfix for users with unlimited
+            # nofiles where resource.RLIMIT_NOFILE is 2^63-1 and os.closerange()
+            # occasionally raises out of range error
+            max_fd = min(1048576, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
             os.closerange(3, exec_err_pipe_write)
             os.closerange(exec_err_pipe_write+1, max_fd)
 
