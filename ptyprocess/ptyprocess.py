@@ -60,11 +60,18 @@ def _make_eof_intr():
     # inherit EOF and INTR definitions from controlling process.
     try:
         from termios import VEOF, VINTR
-        try:
-            fd = sys.__stdin__.fileno()
-        except ValueError:
-            # ValueError: I/O operation on closed file
-            fd = sys.__stdout__.fileno()
+        fd = None
+        for name in 'stdin', 'stdout':
+            stream = getattr(sys, '__%s__' % name, None)
+            if stream is None or not hasattr(stream, 'fileno'):
+                continue
+            try:
+                fd = stream.fileno()
+            except ValueError:
+                continue
+        if fd is None:
+            # no fd, raise ValueError to fallback on CEOF, CINTR
+            raise ValueError("No stream has a fileno")
         intr = ord(termios.tcgetattr(fd)[6][VINTR])
         eof = ord(termios.tcgetattr(fd)[6][VEOF])
     except (ImportError, OSError, IOError, ValueError, termios.error):
