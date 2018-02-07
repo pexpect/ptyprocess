@@ -95,7 +95,7 @@ class PtyProcessError(Exception):
 # to do this from the child before we exec()
     
 def _setecho(fd, state):
-    errmsg = 'setecho() may not be called on this platform'
+    errmsg = 'setecho() may not be called on this platform (it may still be possible to enable/disable echo when spawning the child process)'
 
     try:
         attr = termios.tcgetattr(fd)
