@@ -19,7 +19,7 @@ except ImportError:
 # Constants
 from pty import (STDIN_FILENO, CHILD)
 
-from .util import which
+from .util import which, PtyProcessError
 
 _platform = sys.platform.lower()
 
@@ -87,9 +87,6 @@ def _make_eof_intr():
     
     _INTR = _byte(intr)
     _EOF = _byte(eof)
-
-class PtyProcessError(Exception):
-    """Generic error class for this package."""
 
 # setecho and setwinsize are pulled out here because on some platforms, we need
 # to do this from the child before we exec()
