@@ -1,6 +1,8 @@
+import fcntl
 import os
 import time
 import select
+import tempfile
 import unittest
 from ptyprocess.ptyprocess import which
 from ptyprocess import PtyProcess, PtyProcessUnicode
@@ -111,3 +113,37 @@ class PtyTestCase(unittest.TestCase):
     @unittest.skipIf(which('bc') is None, "bc(1) not found on this server.")
     def test_interactive_repl_unicode_echo(self):
         self._interactive_repl_unicode(echo=True)
+
+    def test_pass_fds(self):
+        with tempfile.NamedTemporaryFile() as temp_file:
+            temp_file_fd = temp_file.fileno()
+            temp_file_name = temp_file.name
+
+            # Temporary files are CLOEXEC by default
+            fcntl.fcntl(temp_file_fd,
+                        fcntl.F_SETFD,
+                        fcntl.fcntl(temp_file_fd, fcntl.F_GETFD) &
+                        ~fcntl.FD_CLOEXEC)
+
+            # You can write with pass_fds
+            p = PtyProcess.spawn(['bash',
+                                  '-c',
+                                  'printf hello >&{}'.format(temp_file_fd)],
+                                 echo=True,
+                                 pass_fds=(temp_file_fd,))
+            p.wait()
+            assert p.status == 0
+
+            with open(temp_file_name, 'r') as temp_file_r:
+                assert temp_file_r.read() == 'hello'
+
+            # You can't write without pass_fds
+            p = PtyProcess.spawn(['bash',
+                                  '-c',
+                                  'printf bye >&{}'.format(temp_file_fd)],
+                                 echo=True)
+            p.wait()
+            assert p.status != 0
+
+            with open(temp_file_name, 'r') as temp_file_r:
+                assert temp_file_r.read() == 'hello'
