@@ -10,6 +10,7 @@ import struct
 import sys
 import termios
 import time
+import threading
 
 try:
     import builtins  # Python 3
@@ -17,11 +18,13 @@ except ImportError:
     import __builtin__ as builtins  # Python 2
 
 # Constants
-from pty import (STDIN_FILENO, CHILD)
+from pty import (STDIN_FILENO, CHILD, STDOUT_FILENO, STDERR_FILENO)
 
 from .util import which, PtyProcessError
 
 _platform = sys.platform.lower()
+
+_posix_spawn_lock = threading.Lock()
 
 # Solaris uses internal __fork_pty(). All others use pty.fork().
 _is_solaris = (
@@ -217,123 +220,175 @@ class PtyProcess(object):
         command = command_with_path
         argv[0] = command
 
-        # [issue #119] To prevent the case where exec fails and the user is
-        # stuck interacting with a python child process instead of whatever
-        # was expected, we implement the solution from
-        # http://stackoverflow.com/a/3703179 to pass the exception to the
-        # parent process
-
-        # [issue #119] 1. Before forking, open a pipe in the parent process.
-        exec_err_pipe_read, exec_err_pipe_write = os.pipe()
-
-        if use_native_pty_fork:
-            pid, fd = pty.fork()
-        else:
-            # Use internal fork_pty, for Solaris
-            pid, fd = _fork_pty.fork_pty()
-
-        # Some platforms must call setwinsize() and setecho() from the
-        # child process, and others from the master process. We do both,
-        # allowing IOError for either.
-
-        if pid == CHILD:
-            # set window size
-            try:
-                _setwinsize(STDIN_FILENO, *dimensions)
-            except IOError as err:
-                if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
-                    raise
-
-            # disable echo if spawn argument echo was unset
-            if not echo:
+        if hasattr(os, 'posix_spawn'):
+            # Without the lock parallel posix_spawns() would
+            # unwittingly inherit each other's PTY(FD)/TTY pair.
+            # True?
+            with _posix_spawn_lock:
+                # Issue 36603: Use os.openpty() (and try to avoid the
+                # whole pty module) as that guarentees inheritable (if
+                # it ever fails then just file a bug against
+                # os.openpty()
+                fd, tty = os.openpty()
+                # Try to set window size on TTY per below; but is this
+                # needed?
                 try:
-                    _setecho(STDIN_FILENO, False)
-                except (IOError, termios.error) as err:
+                    _setwinsize(tty, *dimensions)
+                except IOError as err:
+                    if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
+                        raise
+                # Try to disable echo if spawn argument echo was unset per
+                # below; but does this work?
+                if not echo:
+                    try:
+                        _setecho(tty, False)
+                    except (IOError, termios.error) as err:
+                        if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
+                            raise
+                # Create the child: convert the tty into STDIO; use
+                # the default ENV if needed; and try to make the child
+                # the session head using SETSID.  Assume that all
+                # files have inheritable (close-on-exec) correctly
+                # set.
+                file_actions=[
+                    (os.POSIX_SPAWN_DUP2, tty, STDIN_FILENO),
+                    (os.POSIX_SPAWN_DUP2, tty, STDOUT_FILENO),
+                    (os.POSIX_SPAWN_DUP2, tty, STDERR_FILENO),
+                    (os.POSIX_SPAWN_CLOSE, tty),
+                    (os.POSIX_SPAWN_CLOSE, fd),
+                ]
+                spawn_env = env or os.environ
+                pid = os.posix_spawn(command, argv, spawn_env,
+                                     file_actions=file_actions,
+                                     setsid=True)
+                # Child started.  Now close tty and stop PTY(FD) being
+                # inherited
+                os.close(tty)
+                os.set_inheritable(fd, False)
+        else:
+
+            # [issue #119] To prevent the case where exec fails and
+            # the user is stuck interacting with a python child
+            # process instead of whatever was expected, we implement
+            # the solution from http://stackoverflow.com/a/3703179 to
+            # pass the exception to the parent process
+
+            # [issue #119] 1. Before forking, open a pipe in the
+            # parent process.
+            exec_err_pipe_read, exec_err_pipe_write = os.pipe()
+
+            #  XXX: only use fork_pty()?
+            if use_native_pty_fork:
+                pid, fd = pty.fork()
+            else:
+                # Use internal fork_pty, for Solaris
+                pid, fd = _fork_pty.fork_pty()
+
+            # Some platforms must call setwinsize() and setecho() from
+            # the child process, and others from the master
+            # process. We do both, allowing IOError for either.
+
+            if pid == CHILD:
+                # set window size
+                try:
+                    _setwinsize(STDIN_FILENO, *dimensions)
+                except IOError as err:
                     if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                         raise
 
-            # [issue #119] 3. The child closes the reading end and sets the
-            # close-on-exec flag for the writing end.
-            os.close(exec_err_pipe_read)
-            fcntl.fcntl(exec_err_pipe_write, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
+                # disable echo if spawn argument echo was unset
+                if not echo:
+                    try:
+                        _setecho(STDIN_FILENO, False)
+                    except (IOError, termios.error) as err:
+                        if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
+                            raise
 
-            # Do not allow child to inherit open file descriptors from parent,
-            # with the exception of the exec_err_pipe_write of the pipe
-            # and pass_fds.
-            # Impose ceiling on max_fd: AIX bugfix for users with unlimited
-            # nofiles where resource.RLIMIT_NOFILE is 2^63-1 and os.closerange()
-            # occasionally raises out of range error
-            max_fd = min(1048576, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
-            spass_fds = sorted(set(pass_fds) | {exec_err_pipe_write})
-            for pair in zip([2] + spass_fds, spass_fds + [max_fd]):
-                os.closerange(pair[0]+1, pair[1])
+                # [issue #119] 3. The child closes the reading end and
+                # sets the close-on-exec flag for the writing end.
+                os.close(exec_err_pipe_read)
+                fcntl.fcntl(exec_err_pipe_write, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
 
-            if cwd is not None:
-                os.chdir(cwd)
+                # Do not allow child to inherit open file descriptors from parent,
+                # with the exception of the exec_err_pipe_write of the pipe
+                # and pass_fds.
 
-            if preexec_fn is not None:
+                # Impose ceiling on max_fd: AIX bugfix for users with
+                # unlimited nofiles where resource.RLIMIT_NOFILE is
+                # 2^63-1 and os.closerange() occasionally raises out
+                # of range error
+                max_fd = min(1048576, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
+                spass_fds = sorted(set(pass_fds) | {exec_err_pipe_write})
+                for pair in zip([2] + spass_fds, spass_fds + [max_fd]):
+                    os.closerange(pair[0]+1, pair[1])
+
+                if cwd is not None:
+                    os.chdir(cwd)
+
+                if preexec_fn is not None:
+                    try:
+                        preexec_fn()
+                    except Exception as e:
+                        ename = type(e).__name__
+                        tosend = '{}:0:{}'.format(ename, str(e))
+                        if PY3:
+                            tosend = tosend.encode('utf-8')
+
+                        os.write(exec_err_pipe_write, tosend)
+                        os.close(exec_err_pipe_write)
+                        os._exit(1)
+
                 try:
-                    preexec_fn()
-                except Exception as e:
-                    ename = type(e).__name__
-                    tosend = '{}:0:{}'.format(ename, str(e))
+                    if env is None:
+                        os.execv(command, argv)
+                    else:
+                        os.execvpe(command, argv, env)
+                except OSError as err:
+                    # [issue #119] 5. If exec fails, the child writes
+                    # the error code back to the parent using the
+                    # pipe, then exits.
+                    tosend = 'OSError:{}:{}'.format(err.errno, str(err))
                     if PY3:
                         tosend = tosend.encode('utf-8')
+                        os.write(exec_err_pipe_write, tosend)
+                        os.close(exec_err_pipe_write)
+                        os._exit(os.EX_OSERR)
 
-                    os.write(exec_err_pipe_write, tosend)
-                    os.close(exec_err_pipe_write)
-                    os._exit(1)
+            # [issue #119] 2. After forking, the parent closes the
+            # writing end of the pipe and reads from the reading end.
+            os.close(exec_err_pipe_write)
+            exec_err_data = os.read(exec_err_pipe_read, 4096)
+            os.close(exec_err_pipe_read)
 
-            try:
-                if env is None:
-                    os.execv(command, argv)
+            # [issue #119] 6. The parent reads eof (a zero-length
+            # read) if the child successfully performed exec, since
+            # close-on-exec made successful exec close the writing end
+            # of the pipe. Or, if exec failed, the parent reads the
+            # error code and can proceed accordingly. Either way, the
+            # parent blocks until the child calls exec.
+            if len(exec_err_data) != 0:
+                try:
+                    errclass, errno_s, errmsg = exec_err_data.split(b':', 2)
+                    exctype = getattr(builtins, errclass.decode('ascii'), Exception)
+
+                    exception = exctype(errmsg.decode('utf-8', 'replace'))
+                    if exctype is OSError:
+                        exception.errno = int(errno_s)
+                except:
+                    raise Exception('Subprocess failed, got bad error data: %r'
+                                    % exec_err_data)
                 else:
-                    os.execvpe(command, argv, env)
-            except OSError as err:
-                # [issue #119] 5. If exec fails, the child writes the error
-                # code back to the parent using the pipe, then exits.
-                tosend = 'OSError:{}:{}'.format(err.errno, str(err))
-                if PY3:
-                    tosend = tosend.encode('utf-8')
-                os.write(exec_err_pipe_write, tosend)
-                os.close(exec_err_pipe_write)
-                os._exit(os.EX_OSERR)
+                    raise exception
 
         # Parent
         inst = cls(pid, fd)
-        
+
         # Set some informational attributes
         inst.argv = argv
         if env is not None:
             inst.env = env
         if cwd is not None:
             inst.launch_dir = cwd
-
-        # [issue #119] 2. After forking, the parent closes the writing end
-        # of the pipe and reads from the reading end.
-        os.close(exec_err_pipe_write)
-        exec_err_data = os.read(exec_err_pipe_read, 4096)
-        os.close(exec_err_pipe_read)
-
-        # [issue #119] 6. The parent reads eof (a zero-length read) if the
-        # child successfully performed exec, since close-on-exec made
-        # successful exec close the writing end of the pipe. Or, if exec
-        # failed, the parent reads the error code and can proceed
-        # accordingly. Either way, the parent blocks until the child calls
-        # exec.
-        if len(exec_err_data) != 0:
-            try:
-                errclass, errno_s, errmsg = exec_err_data.split(b':', 2)
-                exctype = getattr(builtins, errclass.decode('ascii'), Exception)
-
-                exception = exctype(errmsg.decode('utf-8', 'replace'))
-                if exctype is OSError:
-                    exception.errno = int(errno_s)
-            except:
-                raise Exception('Subprocess failed, got bad error data: %r'
-                                    % exec_err_data)
-            else:
-                raise exception
 
         try:
             inst.setwinsize(*dimensions)
