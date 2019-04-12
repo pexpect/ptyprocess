@@ -36,7 +36,6 @@ _have_posix_spawn = (
     hasattr(os, 'posix_spawn') and
     _platform.startswith("linux"))
 if _have_posix_spawn:
-    print("using posix_spawn")
     _posix_spawn_lock = threading.Lock()
 
 # Solaris uses internal __fork_pty(). All others use pty.fork().
