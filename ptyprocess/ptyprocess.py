@@ -221,50 +221,58 @@ class PtyProcess(object):
         argv[0] = command
 
         if hasattr(os, 'posix_spawn'):
-            # Without the lock parallel posix_spawns() would
-            # unwittingly inherit each other's PTY(FD)/TTY pair.
-            # True?
+            print("using os.spawn_lock()")
             with _posix_spawn_lock:
-                # Issue 36603: Use os.openpty() (and try to avoid the
-                # whole pty module) as that guarentees inheritable (if
-                # it ever fails then just file a bug against
-                # os.openpty()
+                # Try to ensure that the tty/pty have O_CLOEXEC set
+                # (aka non-inheritable) so that a parallel call to
+                # this code won't end up with an open PTY/TTY.
+                # Unfortunately os.openpty() (openpty(3)) never sets
+                # O_CLOEXEC and pty.open() (Issue 36603) only
+                # sometimes sets O_CLOEXEC.
+                #
+                # Is this a bug?  Arguably yes.  However it isn't easy
+                # to fix - unless the native openpty(3) atomically
+                # opens the pty/tty with O_CLOEXEC there's always
+                # going to be a race.  This lock mitigates the case
+                # where fork()/exec() is using this path (or other
+                # code paths such as subprocess that brute force a
+                # close of all FDs).
                 fd, tty = os.openpty()
-                # Try to set window size on TTY per below; but is this
-                # needed?
+                os.set_inheritable(fd, False)
+                os.set_inheritable(tty, False)
+            # Try to set window size on TTY per below; but is this
+            # needed?
+            try:
+                _setwinsize(tty, *dimensions)
+            except IOError as err:
+                if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
+                    raise
+            # Try to disable echo if spawn argument echo was unset per
+            # below; but does this work?
+            if not echo:
                 try:
-                    _setwinsize(tty, *dimensions)
-                except IOError as err:
+                    _setecho(tty, False)
+                except (IOError, termios.error) as err:
                     if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                         raise
-                # Try to disable echo if spawn argument echo was unset per
-                # below; but does this work?
-                if not echo:
-                    try:
-                        _setecho(tty, False)
-                    except (IOError, termios.error) as err:
-                        if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
-                            raise
-                # Create the child: convert the tty into STDIO; use
-                # the default ENV if needed; and try to make the child
-                # the session head using SETSID.  Assume that all
-                # files have inheritable (close-on-exec) correctly
-                # set.
-                file_actions=[
-                    (os.POSIX_SPAWN_DUP2, tty, STDIN_FILENO),
-                    (os.POSIX_SPAWN_DUP2, tty, STDOUT_FILENO),
-                    (os.POSIX_SPAWN_DUP2, tty, STDERR_FILENO),
-                    (os.POSIX_SPAWN_CLOSE, tty),
-                    (os.POSIX_SPAWN_CLOSE, fd),
-                ]
-                spawn_env = env or os.environ
-                pid = os.posix_spawn(command, argv, spawn_env,
-                                     file_actions=file_actions,
-                                     setsid=True)
-                # Child started.  Now close tty and stop PTY(FD) being
-                # inherited
-                os.close(tty)
-                os.set_inheritable(fd, False)
+            # Create the child: convert the tty into STDIO; use the
+            # default ENV if needed; and try to make the child the
+            # session head using SETSID.  Assume that all files have
+            # inheritable (close-on-exec) correctly set.
+            file_actions=[
+                (os.POSIX_SPAWN_DUP2, tty, STDIN_FILENO),
+                (os.POSIX_SPAWN_DUP2, tty, STDOUT_FILENO),
+                (os.POSIX_SPAWN_DUP2, tty, STDERR_FILENO),
+                # not needed?
+                (os.POSIX_SPAWN_CLOSE, tty),
+                (os.POSIX_SPAWN_CLOSE, fd),
+            ]
+            spawn_env = env or os.environ
+            pid = os.posix_spawn(command, argv, spawn_env,
+                                 file_actions=file_actions,
+                                 setsid=True)
+            # Child started; close the child's tty.
+            os.close(tty)
         else:
 
             # [issue #119] To prevent the case where exec fails and
