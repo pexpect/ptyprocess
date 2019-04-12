@@ -24,7 +24,20 @@ from .util import which, PtyProcessError
 
 _platform = sys.platform.lower()
 
-_posix_spawn_lock = threading.Lock()
+# Is posix_spawn() robust?  Require both os.posix_spawn() and the
+# POSIX_SPAWN_SETSID extension (the latter, via setsid(),
+# disassociates the child from the parent's session creating a new
+# session and group and should be called when the system has things
+# like job control) (there doesn't seem to be a runtime test for the
+# latter, see bpo-36619).  On systems that don't have job control,
+# POSIX_SPAWN_SETPGROUP is probably sufficient but detecting that case
+# is even harder.
+_have_posix_spawn = (
+    hasattr(os, 'posix_spawn') and
+    _platform.startswith("linux"))
+if _have_posix_spawn:
+    print("using posix_spawn")
+    _posix_spawn_lock = threading.Lock()
 
 # Solaris uses internal __fork_pty(). All others use pty.fork().
 _is_solaris = (
@@ -220,7 +233,7 @@ class PtyProcess(object):
         command = command_with_path
         argv[0] = command
 
-        if hasattr(os, 'posix_spawn'):
+        if _have_posix_spawn:
             with _posix_spawn_lock:
                 # Try to ensure that the tty/pty have O_CLOEXEC set
                 # (aka non-inheritable) so that a parallel call to
@@ -260,10 +273,9 @@ class PtyProcess(object):
             #
             # - always specify ENV (use the default if needed)
             #
-            # - put the child into its own process group using
-            # setpgroup=0; while setsid=True seems to be better
-            # there's no way to determine if it is available
-            # (bpo-36619).
+            # - use setsid=True to create a new session (and
+            # disassociate the child from the parent's session /
+            # terminal) and make the child the process group leader
             #
             # - assume that all files have inheritable (close-on-exec)
             # correctly set.
@@ -278,7 +290,7 @@ class PtyProcess(object):
             spawn_env = env or os.environ
             pid = os.posix_spawn(command, argv, spawn_env,
                                  file_actions=file_actions,
-                                 setpgroup=0)
+                                 setsid=0)
             # Child started; close the child's tty.
             os.close(tty)
         else:
