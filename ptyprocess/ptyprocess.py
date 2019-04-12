@@ -221,7 +221,6 @@ class PtyProcess(object):
         argv[0] = command
 
         if hasattr(os, 'posix_spawn'):
-            print("using os.spawn_lock()")
             with _posix_spawn_lock:
                 # Try to ensure that the tty/pty have O_CLOEXEC set
                 # (aka non-inheritable) so that a parallel call to
@@ -255,10 +254,19 @@ class PtyProcess(object):
                 except (IOError, termios.error) as err:
                     if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                         raise
-            # Create the child: convert the tty into STDIO; use the
-            # default ENV if needed; and try to make the child the
-            # session head using SETSID.  Assume that all files have
-            # inheritable (close-on-exec) correctly set.
+            # Create the child:
+            #
+            # - convert the tty into STDIN / STDOUT / STDERR
+            #
+            # - always specify ENV (use the default if needed)
+            #
+            # - put the child into its own process group using
+            # setpgroup=0; while setsid=True seems to be better
+            # there's no way to determine if it is available
+            # (bpo-36619).
+            #
+            # - assume that all files have inheritable (close-on-exec)
+            # correctly set.
             file_actions=[
                 (os.POSIX_SPAWN_DUP2, tty, STDIN_FILENO),
                 (os.POSIX_SPAWN_DUP2, tty, STDOUT_FILENO),
@@ -270,7 +278,7 @@ class PtyProcess(object):
             spawn_env = env or os.environ
             pid = os.posix_spawn(command, argv, spawn_env,
                                  file_actions=file_actions,
-                                 setsid=True)
+                                 setpgroup=0)
             # Child started; close the child's tty.
             os.close(tty)
         else:
