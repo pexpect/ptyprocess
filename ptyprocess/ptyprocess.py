@@ -426,19 +426,20 @@ class PtyProcess(object):
         return os.isatty(self.fd)
 
     def waitnoecho(self, timeout=None):
-        '''This waits until the terminal ECHO flag is set False. This returns
-        True if the echo mode is off. This returns False if the ECHO flag was
-        not set False before the timeout. This can be used to detect when the
+        '''Wait until the terminal ECHO flag is set False.
+
+        This returns True if the echo mode is off, or False if echo was not
+        disabled before the timeout. This can be used to detect when the
         child is waiting for a password. Usually a child application will turn
         off echo mode when it is waiting for the user to enter a password. For
         example, instead of expecting the "password:" prompt you can wait for
-        the child to set ECHO off::
+        the child to turn echo off::
 
             p = pexpect.spawn('ssh user@example.com')
             p.waitnoecho()
             p.sendline(mypassword)
 
-        If timeout==None then this method to block until ECHO flag is False.
+        If ``timeout=None`` then this method to block until ECHO flag is False.
         '''
 
         if timeout is not None:
@@ -453,11 +454,13 @@ class PtyProcess(object):
             time.sleep(0.1)
 
     def getecho(self):
-        '''This returns the terminal echo mode. This returns True if echo is
-        on or False if echo is off. Child applications that are expecting you
-        to enter a password often set ECHO False. See waitnoecho().
+        '''Returns True if terminal echo is on, or False if echo is off.
 
-        Not supported on platforms where ``isatty()`` returns False.  '''
+        Child applications that are expecting you to enter a password often
+        disable echo. See also :meth:`waitnoecho`.
+
+        Not supported on platforms where ``isatty()`` returns False.
+        '''
 
         try:
             attr = termios.tcgetattr(self.fd)
@@ -471,10 +474,11 @@ class PtyProcess(object):
         return self.echo
 
     def setecho(self, state):
-        '''This sets the terminal echo mode on or off. Note that anything the
-        child sent before the echo will be lost, so you should be sure that
-        your input buffer is empty before you call setecho(). For example, the
-        following will work as expected::
+        '''Enable or disable terminal echo.
+
+        Anything the child sent before the echo will be lost, so you should be
+        sure that your input buffer is empty before you call setecho().
+        For example, the following will work as expected::
 
             p = pexpect.spawn('cat') # Echo is on by default.
             p.sendline('1234') # We expect see this twice from the child...
@@ -568,13 +572,13 @@ class PtyProcess(object):
         return self._writeb(s, flush=flush)
 
     def sendcontrol(self, char):
-        '''Helper method that wraps send() with mnemonic access for sending control
-        character to the child (such as Ctrl-C or Ctrl-D).  For example, to send
-        Ctrl-G (ASCII 7, bell, '\a')::
+        '''Helper method for sending control characters to the terminal.
+
+        For example, to send Ctrl-G (ASCII 7, bell, ``'\\a'``)::
 
             child.sendcontrol('g')
 
-        See also, sendintr() and sendeof().
+        See also, :meth:`sendintr` and :meth:`sendeof`.
         '''
         char = char.lower()
         a = ord(char)
@@ -596,21 +600,30 @@ class PtyProcess(object):
         return self._writeb(byte), byte
 
     def sendeof(self):
-        '''This sends an EOF to the child. This sends a character which causes
+        '''Sends an EOF (typically Ctrl-D) through the terminal.
+
+        This sends a character which causes
         the pending parent output buffer to be sent to the waiting child
         program without waiting for end-of-line. If it is the first character
         of the line, the read() in the user program returns 0, which signifies
         end-of-file. This means to work as expected a sendeof() has to be
         called at the beginning of a line. This method does not send a newline.
         It is the responsibility of the caller to ensure the eof is sent at the
-        beginning of a line. '''
-
+        beginning of a line.
+        '''
         return self._writeb(_EOF), _EOF
 
     def sendintr(self):
-        '''This sends a SIGINT to the child. It does not require
-        the SIGINT to be the first character on a line. '''
+        '''Send an interrupt character (typically Ctrl-C) through the terminal.
 
+        This will normally trigger the kernel to send SIGINT to the current
+        foreground process group. Processes can turn off this translation, in
+        which case they can read the raw data sent, e.g. ``b'\\x03'`` for Ctrl-C.
+
+        See also the :meth:`kill` method, which sends a signal directly to the
+        immediate child process in the terminal (which is not necessarily the
+        foreground process).
+        '''
         return self._writeb(_INTR), _INTR
 
     def eof(self):
