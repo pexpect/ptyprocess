@@ -9,6 +9,7 @@ If you need to automate these things, running the process in a pseudo terminal
 
 Interface::
 
+    from ptyprocess import PtyProcessUnicode
     p = PtyProcessUnicode.spawn(['python'])
     p.read(20)
     p.write('6+6\n')
