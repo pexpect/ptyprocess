@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest
+          pip install pytest pytest-timeout
 
       - name: Run tests
-        run: pytest -v
+        run: pytest --timeout 60 -v
