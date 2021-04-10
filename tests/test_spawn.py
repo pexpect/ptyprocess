@@ -142,6 +142,7 @@ class PtyTestCase(unittest.TestCase):
                                   '-c',
                                   'printf bye >&{}'.format(temp_file_fd)],
                                  echo=True)
+            p.read() # Read error off child to allow it to terminate nicely
             p.wait()
             assert p.status != 0
 
