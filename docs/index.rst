@@ -27,17 +27,17 @@ streams are connected to a single pty:
 A pty also does more than a pipe. It keeps track of the window size (rows and
 columns of characters) and notifies child processes (with a SIGWINCH signal)
 when it changes. In *cooked mode*, it does some processing of data sent from the
-parent process, so for instance the byte ``03`` (entered as Ctrl-C) will cause
+parent process, so for instance, the byte ``03`` (entered as Ctrl-C) will cause
 SIGINT to be sent to the child process.
 
-Many command line programs behave differently if they detect that stdin or stdout
+Many command-line programs behave differently if they detect that stdin or stdout
 is connected to a terminal instead of a pipe (using 
 `isatty() <http://linux.die.net/man/3/isatty>`_), because this normally means
 that they're being used interactively by a human user.
 They may format output differently (e.g. ``ls`` lists files in columns)
 or prompt the user to confirm actions.
 When you run these programs in ptyprocess, they will exhibit their 'interactive'
-behaviour, instead of the 'pipe' behaviour you'll see using ``Popen()``.
+behaviour, instead of the 'pipe' behaviour, you'll see using ``Popen()``.
 
 .. seealso::
 
