@@ -1,6 +1,7 @@
 Ptyprocess is under the ISC license, as code derived from Pexpect.
     http://opensource.org/licenses/ISC
 
+Copyright (c) 2015-2021, Saiprasad Kale
 Copyright (c) 2013-2014, Pexpect development team
 Copyright (c) 2012, Noah Spurrier <noah@noah.org>
 
