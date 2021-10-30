@@ -7,7 +7,9 @@ pipe rather than a terminal, or curses-style interfaces that rely on a terminal.
 If you need to automate these things, running the process in a pseudo terminal
 (pty) is the answer.
 
-Interface::
+Interface:
+
+.. code:: python
 
     from ptyprocess import PtyProcessUnicode
     p = PtyProcessUnicode.spawn(['python'])
