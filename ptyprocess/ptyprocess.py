@@ -120,9 +120,10 @@ def _setwinsize(fd, rows, cols):
     # termios.TIOCSWINSZ to be truncated. There was a hack here to work
     # around this, but it caused problems with newer platforms so has been
     # removed. For details see https://github.com/pexpect/pexpect/issues/39
+    width, height = cols, rows
     TIOCSWINSZ = getattr(termios, 'TIOCSWINSZ', -2146929561)
     # Note, assume ws_xpixel and ws_ypixel are zero.
-    s = struct.pack('HHHH', rows, cols, 0, 0)
+    s = struct.pack('HHHH', width, height, 0, 0)
     fcntl.ioctl(fd, TIOCSWINSZ, s)
 
 class PtyProcess(object):
