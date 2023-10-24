@@ -57,6 +57,10 @@ class PtyTestCase(unittest.TestCase):
         # because the pty file descriptor was quickly lost after exec().
         PtyProcess.spawn(['true'])
 
+    def test_spawn_unicode_decoding(self):
+        p = PtyProcessUnicode.spawn(['printf', '\\344\\272!'], codec_errors='backslashreplace')
+        assert p.read() == '\\xe4\\xba!'
+
     def _interactive_repl_unicode(self, echo):
         """Test Call and response with echo ON/OFF."""
         # given,
