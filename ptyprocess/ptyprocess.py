@@ -206,6 +206,19 @@ class PtyProcess(object):
         if not isinstance(argv, (list, tuple)):
             raise TypeError("Expected a list or tuple for argv, got %r" % argv)
 
+        # env vars must be utf-8 encoded strings
+        # https://github.com/pexpect/pexpect/issues/512
+        #
+        # from https://docs.python.org/3.8/library/os.html#os.execvpe
+        # Errors will be reported as OSError exceptions.
+        if isinstance(env, dict):
+            _text_type = str
+            if not PY3:
+                _text_type = unicode
+            for k, v in env.items():
+                if isinstance(v, _text_type):
+                    env[k] = v.encode('utf-8')
+
         # Shallow copy of argv so we can modify it
         argv = argv[:]
         command = argv[0]
@@ -289,10 +302,14 @@ class PtyProcess(object):
                     os.execv(command, argv)
                 else:
                     os.execvpe(command, argv, env)
-            except OSError as err:
+            except Exception as err:
                 # [issue #119] 5. If exec fails, the child writes the error
                 # code back to the parent using the pipe, then exits.
-                tosend = 'OSError:{}:{}'.format(err.errno, str(err))
+                if isinstance(err, OSError):
+                    tosend = 'OSError:{}:{}'.format(err.errno, str(err))
+                else:
+                    cls_name = err.__class__.__name__
+                    tosend = 'Exception:0:{}: {}'.format(cls_name, str(err))
                 if PY3:
                     tosend = tosend.encode('utf-8')
                 os.write(exec_err_pipe_write, tosend)
