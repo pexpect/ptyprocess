@@ -1,0 +1,3 @@
+include README.rst
+graft tests
+global-exclude __pycache__ *.pyc
