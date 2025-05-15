@@ -1,4 +1,10 @@
-"""Substitute for the forkpty system call, to support Solaris.
+"""
+Provides an alternative PTY forking mechanism.
+
+This implementation serves as a substitute for Python's standard `pty.fork()`
+functionality, especially on platforms where `os.login_tty()` is unavailable
+in the Python build (e.g., some AIX configurations) or where the standard
+implementation is problematic (e.g., historically on Solaris).
 """
 import os
 import errno
@@ -7,17 +13,26 @@ from pty import (STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CHILD)
 from .util import PtyProcessError
 
 def fork_pty():
-    '''This implements a substitute for the forkpty system call. This
-    should be more portable than the pty.fork() function. Specifically,
-    this should work on Solaris.
+    '''This implements a substitute for the functionality of pty.fork(),
+    aiming for greater portability, especially on systems where Python's
+    os.login_tty() is unavailable or pty.fork() is problematic.
 
-    Modified 10.06.05 by Geoff Marshall: Implemented __fork_pty() method to
-    resolve the issue with Python's pty.fork() not supporting Solaris,
-    particularly ssh. Based on patch to posixmodule.c authored by Noah
-    Spurrier::
+    It is designed to work on:
+    - Solaris systems (addressing historical issues with Python's pty.fork()).
+    - AIX systems where os.login_tty() might not be compiled into Python.
+    - Other Unix-like systems that might lack a functional os.login_tty().
 
+    The core logic for establishing a new session and making the pseudo-terminal
+    the controlling terminal is handled herein, similar to the operations
+    typically performed by login_tty().
+
+    Historical Context (Original Solaris solution by Geoff Marshall, 10.06.05):
+    The method was initially implemented to resolve issues with Python's
+    pty.fork() on Solaris, particularly for applications like ssh. It was
+    inspired by a patch to Python's posixmodule.c authored by Noah Spurrier:
         http://mail.python.org/pipermail/python-dev/2003-May/035281.html
-
+    This approach has been generalized to cover other platforms or scenarios
+    where os.login_tty() is not available.
     '''
 
     parent_fd, child_fd = os.openpty()
