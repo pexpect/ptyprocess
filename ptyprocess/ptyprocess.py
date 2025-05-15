@@ -32,6 +32,8 @@ try:
     from os import login_tty
 except ImportError:
     _no_login_tty = True
+else:
+    _no_login_tty = False
 
 if _is_solaris or _no_login_tty:
     use_native_pty_fork = False
