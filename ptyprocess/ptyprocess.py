@@ -336,7 +336,7 @@ class PtyProcess(object):
                 exception = exctype(errmsg.decode('utf-8', 'replace'))
                 if exctype is OSError:
                     exception.errno = int(errno_s)
-            except:
+            except Exception:
                 raise Exception('Subprocess failed, got bad error data: %r'
                                     % exec_err_data)
             else:
@@ -388,7 +388,7 @@ class PtyProcess(object):
             try:
                 self.close()
             # which exception, shouldn't we catch explicitly .. ?
-            except:
+            except Exception:
                 pass
 
 
