@@ -276,7 +276,20 @@ class PtyProcess(object):
                 os.closerange(pair[0]+1, pair[1])
 
             if cwd is not None:
-                os.chdir(cwd)
+                try:
+                    os.chdir(cwd)
+                except OSError as err:
+                    # [issue pexpect #757] If chdir fails, report the error
+                    # to the parent through the error pipe, as done for exec
+                    # failures below. Otherwise the parent never learns that
+                    # the child failed (and may block forever if the child's
+                    # own exception handling deadlocks after fork).
+                    tosend = 'OSError:{}:{}'.format(err.errno, str(err))
+                    if PY3:
+                        tosend = tosend.encode('utf-8')
+                    os.write(exec_err_pipe_write, tosend)
+                    os.close(exec_err_pipe_write)
+                    os._exit(os.EX_OSERR)
 
             if preexec_fn is not None:
                 try:

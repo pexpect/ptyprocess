@@ -1,3 +1,4 @@
+import errno
 import fcntl
 import os
 import time
@@ -49,6 +50,34 @@ class PtyTestCase(unittest.TestCase):
         outp = u''
         self._spawn_sh(PtyProcessUnicode, self.cmd,
                        outp, self.env_value)
+
+    def test_spawn_bad_cwd(self):
+        """Spawning with a cwd that does not exist must raise OSError in
+        the parent, instead of silently returning a dead child process
+        or hanging (pexpect issue #757)."""
+        bad_dir = os.path.join(tempfile.gettempdir(),
+                               'ptyprocess-no-such-dir')
+        assert not os.path.exists(bad_dir)
+        with self.assertRaises(OSError) as cm:
+            PtyProcess.spawn(['true'], cwd=bad_dir)
+        self.assertEqual(cm.exception.errno, errno.ENOENT)
+
+    def test_spawn_good_cwd(self):
+        """Control: a valid cwd is used as the child's working directory."""
+        dirpath = tempfile.mkdtemp()
+        try:
+            child = PtyProcess.spawn(['/bin/sh', '-c', 'pwd'], cwd=dirpath)
+            outp = b''
+            while True:
+                try:
+                    outp += child.read()
+                except EOFError:
+                    break
+            self.assertEqual(child.wait(), 0)
+            self.assertEqual(outp.strip().decode('ascii'),
+                             os.path.realpath(dirpath))
+        finally:
+            os.rmdir(dirpath)
 
     def test_quick_spawn(self):
         """Spawn a very short-lived process."""
