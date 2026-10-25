@@ -275,30 +275,30 @@ class PtyProcess(object):
             for pair in zip([2] + spass_fds, spass_fds + [max_fd]):
                 os.closerange(pair[0]+1, pair[1])
 
-            if cwd is not None:
-                os.chdir(cwd)
-
-            if preexec_fn is not None:
-                try:
-                    preexec_fn()
-                except Exception as e:
-                    ename = type(e).__name__
-                    tosend = '{}:0:{}'.format(ename, str(e))
-                    if PY3:
-                        tosend = tosend.encode('utf-8')
-
-                    os.write(exec_err_pipe_write, tosend)
-                    os.close(exec_err_pipe_write)
-                    os._exit(1)
-
             try:
+                if cwd is not None:
+                    os.chdir(cwd)
+
+                if preexec_fn is not None:
+                    try:
+                        preexec_fn()
+                    except Exception as e:
+                        ename = type(e).__name__
+                        tosend = '{}:0:{}'.format(ename, str(e))
+                        if PY3:
+                            tosend = tosend.encode('utf-8')
+
+                        os.write(exec_err_pipe_write, tosend)
+                        os.close(exec_err_pipe_write)
+                        os._exit(1)
+
                 if env is None:
                     os.execv(command, argv)
                 else:
                     os.execvpe(command, argv, env)
             except OSError as err:
-                # [issue #119] 5. If exec fails, the child writes the error
-                # code back to the parent using the pipe, then exits.
+                # [issue #119] 5. If chdir or exec fails, the child writes the
+                # error code back to the parent using the pipe, then exits.
                 tosend = 'OSError:{}:{}'.format(err.errno, str(err))
                 if PY3:
                     tosend = tosend.encode('utf-8')
