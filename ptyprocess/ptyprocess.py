@@ -214,7 +214,7 @@ class PtyProcess(object):
             raise TypeError("Expected a list or tuple for argv, got %r" % argv)
 
         # Shallow copy of argv so we can modify it
-        argv = argv[:]
+        argv = list(argv)
         command = argv[0]
 
         command_with_path = which(command)

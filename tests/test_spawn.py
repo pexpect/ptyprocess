@@ -2,8 +2,10 @@ import fcntl
 import os
 import time
 import select
+import sys
 import tempfile
 import unittest
+from unittest import mock
 from ptyprocess.ptyprocess import which
 from ptyprocess import PtyProcess, PtyProcessUnicode
 
@@ -60,6 +62,52 @@ class PtyTestCase(unittest.TestCase):
     def test_spawn_unicode_decoding(self):
         p = PtyProcessUnicode.spawn(['printf', '\\344\\272!'], codec_errors='backslashreplace')
         assert p.read() == '\\xe4\\xba!'
+
+    def _spawn_argv(self, process_type, argv_type):
+        command = os.path.basename(sys.executable)
+        argv = argv_type([
+            command, '-c',
+            'import sys; sys.stdout.write(repr(sys.argv[1:])); sys.exit(7)',
+            'one argument with spaces', 'second',
+        ])
+        original = argv[:]
+        with mock.patch.dict(os.environ, {'PATH': os.path.dirname(sys.executable)}):
+            child = process_type.spawn(argv)
+        try:
+            self.assertEqual(argv, original)
+            self.assertTrue(os.path.isabs(child.argv[0]))
+            self.assertNotEqual(child.argv[0], command)
+            output = child.string_type()
+            deadline = time.monotonic() + 10
+            while True:
+                remaining = deadline - time.monotonic()
+                self.assertGreater(remaining, 0, 'Child output timed out')
+                ready, _, _ = select.select([child.fd], [], [], remaining)
+                self.assertTrue(ready, 'Child output timed out')
+                try:
+                    output += child.read()
+                except EOFError:
+                    break
+            expected = "['one argument with spaces', 'second']"
+            if process_type is PtyProcess:
+                expected = expected.encode('ascii')
+            self.assertEqual(output, expected)
+            self.assertEqual(child.wait(), 7)
+            self.assertEqual(argv, original)
+        finally:
+            child.close(force=True)
+
+    def test_spawn_tuple(self):
+        self._spawn_argv(PtyProcess, tuple)
+
+    def test_spawn_unicode_tuple(self):
+        self._spawn_argv(PtyProcessUnicode, tuple)
+
+    def test_spawn_list_preserves_argv(self):
+        self._spawn_argv(PtyProcess, list)
+
+    def test_spawn_unicode_list_preserves_argv(self):
+        self._spawn_argv(PtyProcessUnicode, list)
 
     def _interactive_repl_unicode(self, echo):
         """Test Call and response with echo ON/OFF."""
