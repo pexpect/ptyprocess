@@ -75,8 +75,9 @@ def main():
         signal.signal(signal.SIGINT, previous)
         # Python ignores SIGPIPE, SIGXFZ and SIGXFSZ when it starts, and `exec`
         # keeps ignored signals ignored. So `defaults` names each of these
-        # signals that the caller does not ignore. The command then gets the
-        # same actions as after fork().
+        # signals that the caller does not ignore, or all of them with
+        # `restore_signals`. The command then gets the same actions as after
+        # fork().
         for name in filter(None, defaults.split(',')):
             signal.signal(getattr(signal, name), signal.SIG_DFL)
         signal.pthread_sigmask(signal.SIG_SETMASK, ())

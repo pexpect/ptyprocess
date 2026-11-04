@@ -186,7 +186,8 @@ class PtyProcess(object):
     @classmethod
     def spawn(
             cls, argv, cwd=None, env=None, echo=True, preexec_fn=None,
-            dimensions=(24, 80), pass_fds=(), **kwargs):
+            dimensions=(24, 80), pass_fds=(), restore_signals=False,
+            **kwargs):
         '''Start the given command in a child process in a pseudo terminal.
 
         This does all the fork/exec type of stuff for a pty, and returns an
@@ -207,6 +208,12 @@ class PtyProcess(object):
         It may, for instance, set signal handlers to SIG_DFL or SIG_IGN.
         A preexec_fn can only run in a fork of the current process, so this
         always forks when preexec_fn is supplied.
+
+        If restore_signals is true, the signals that Python ignores (SIGPIPE,
+        SIGXFZ and SIGXFSZ) are reset to their default action in the child
+        before exec, as with :class:`subprocess.Popen`. Otherwise the child
+        gets the action that the current process has for each of these
+        signals.
 
         Dimensions of the psuedoterminal used for the subprocess can be
         specified as a tuple (rows, cols), or the default (24, 80) will be used.
@@ -243,7 +250,8 @@ class PtyProcess(object):
                 _setwinsize(tty, *dimensions)
                 if not echo:
                     _setecho(tty, False)
-                pid = _posix_spawn.spawn(fd, tty, argv, cwd, env, pass_fds)
+                pid = _posix_spawn.spawn(fd, tty, argv, cwd, env, pass_fds,
+                                         restore_signals)
             except BaseException:
                 os.close(fd)
                 raise
@@ -291,6 +299,11 @@ class PtyProcess(object):
                 except (IOError, termios.error) as err:
                     if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                         raise
+
+            if restore_signals:
+                for name in ('SIGPIPE', 'SIGXFZ', 'SIGXFSZ'):
+                    if hasattr(signal, name):
+                        signal.signal(getattr(signal, name), signal.SIG_DFL)
 
             # [issue #119] 3. The child closes the reading end and sets the
             # close-on-exec flag for the writing end.

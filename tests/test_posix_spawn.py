@@ -241,6 +241,14 @@ def stop_with_ctrl_c(process):
     return status
 
 
+def survives(signal_name, **kwargs):
+    """Return True if a shell in a new terminal survives a signal that it sends
+    to itself."""
+    # The default action of SIGXFSZ writes a core file, so turn core files off.
+    script = 'ulimit -c 0; kill -%s $$; echo survived' % signal_name
+    return 'survived' in output_of(['sh', '-c', script], **kwargs)
+
+
 def open_fds():
     """Return the numbers of the file descriptors that are open in this
     process."""
@@ -385,11 +393,24 @@ class PosixSpawnTestCase(unittest.TestCase):
         output = output_of([sh, b'-c', b'echo hello'])
         self.assertEqual(output.split(), ['hello'])
 
+    def assert_restores_signals(self):
+        for name in ['PIPE', 'XFSZ']:
+            with self.subTest(signal=name):
+                self.assertTrue(survives(name))
+                self.assertFalse(survives(name, restore_signals=True))
+
+    def test_restore_signals(self):
+        self.assert_restores_signals()
+
     def test_signal_actions_of_the_caller(self):
         # A shell that ignores the signal prints "survived".
         run_script(SIGNALS_AT_DEFAULT, self.tmp)
         with open(os.path.join(self.tmp, 'result.txt')) as f:
             self.assertEqual(f.read().split(), [])
+
+    def test_restore_signals_after_fork(self):
+        with mock.patch.object(_posix_spawn, 'available', return_value=False):
+            self.assert_restores_signals()
 
     def test_file_descriptors_are_not_inherited(self):
         self.assertEqual(open_descriptors(), [])

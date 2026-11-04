@@ -213,7 +213,7 @@ def _exit_code(status):
 
 
 def spawn(master, tty, argv, cwd=None, env=None, pass_fds=(),
-          executable=None):
+          restore_signals=False, executable=None):
     """Start `argv` in a new session, with `tty` as its controlling terminal,
     and return the process ID. `master` is the other end of the terminal, and
     `executable` is the interpreter of the helper, sys.executable by default.
@@ -244,8 +244,9 @@ def spawn(master, tty, argv, cwd=None, env=None, pass_fds=(),
     error_fd, env_fd = [fd for fd in range(3, len(pass_fds) + 5)
                         if fd not in pass_fds][:2]
     defaults = [name for name in ('SIGPIPE', 'SIGXFZ', 'SIGXFSZ')
-                if hasattr(signal, name) and
-                signal.getsignal(getattr(signal, name)) != signal.SIG_IGN]
+                if hasattr(signal, name) and (
+                    restore_signals or
+                    signal.getsignal(getattr(signal, name)) != signal.SIG_IGN)]
     # _posix_spawn_helper.py explains the arguments, the file descriptors, the
     # environment and the blocked SIGINT.
     helper_argv = [
