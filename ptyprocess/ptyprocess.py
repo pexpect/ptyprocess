@@ -198,8 +198,9 @@ class PtyProcess(object):
         :func:`os.posix_spawn`, and the helper sets up the terminal and then
         calls ``exec``. The child then has no copy of the memory of the
         current process, so no code from the current process runs in the
-        child. On Solaris, in frozen applications, and when the helper
-        interpreter does not start, this forks.
+        child. On Solaris, in frozen applications, when the helper interpreter
+        does not start, and when the environment variable
+        ``PTYPROCESS_USE_FORK`` is ``1``, this forks.
 
         If preexec_fn is supplied, it will be called with no arguments in the
         child process before exec-ing the specified command.

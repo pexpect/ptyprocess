@@ -571,3 +571,15 @@ class PosixSpawnTestCase(unittest.TestCase):
                     DeprecationWarning)
                 output = output_of(['sh', '-c', 'echo hello'])
                 self.assertIn('hello', output)
+
+    @requires_helper
+    def test_environment_variable_selects_the_fork(self):
+        with mock.patch.dict(os.environ, PTYPROCESS_USE_FORK='1'), \
+                mock.patch.object(_posix_spawn, 'spawn') as spawn, \
+                warnings.catch_warnings():
+            warnings.filterwarnings(
+                'ignore', 'This process .* is multi-threaded',
+                DeprecationWarning)
+            output = output_of(['sh', '-c', 'echo hello'])
+        self.assertIn('hello', output)
+        spawn.assert_not_called()

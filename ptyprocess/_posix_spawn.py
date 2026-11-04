@@ -35,16 +35,22 @@ log = logging.getLogger(__name__)
 # block the helper with no time limit.
 EXEC_TIMEOUT = 30
 
+# When this environment variable is 1, PtyProcess.spawn() forks, as in
+# ptyprocess 0.7.0.
+FORK_VARIABLE = 'PTYPROCESS_USE_FORK'
+
 
 def available():
     """Return True if spawn() can start a process without forking this
     process. On Solaris, PtyProcess.spawn() keeps its own fork path.
 
-    The first call starts the helper once to test it. This test takes 15 to
-    30 ms on Linux, and at most EXEC_TIMEOUT seconds.
+    Return False when the environment variable PTYPROCESS_USE_FORK is 1.
+    Otherwise, the first call starts the helper once to test it. This test
+    takes 15 to 30 ms on Linux, and at most EXEC_TIMEOUT seconds.
     """
     return (
-        hasattr(os, 'posix_spawn')
+        os.environ.get(FORK_VARIABLE) != '1'
+        and hasattr(os, 'posix_spawn')
         and hasattr(termios, 'TIOCSCTTY')
         and not sys.platform.startswith(('solaris', 'sunos'))
         and not getattr(sys, 'frozen', False)
