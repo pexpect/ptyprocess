@@ -14,6 +14,8 @@ import tempfile
 import textwrap
 import unittest
 
+from ptyprocess import _posix_spawn
+
 # The root of this repository, which the scripts import ptyprocess from
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -30,6 +32,9 @@ def run_script(script, cwd):
     return result.stdout
 
 
+@unittest.skipUnless(
+    _posix_spawn.available(),
+    '_posix_spawn.available() is False, so spawn() still forks')
 class ForkHazardsTestCase(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
