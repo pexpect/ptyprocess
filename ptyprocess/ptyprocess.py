@@ -20,6 +20,7 @@ except ImportError:
 from pty import (STDIN_FILENO, CHILD)
 
 from .util import which, PtyProcessError
+from . import _posix_spawn
 
 _platform = sys.platform.lower()
 
@@ -185,15 +186,34 @@ class PtyProcess(object):
     @classmethod
     def spawn(
             cls, argv, cwd=None, env=None, echo=True, preexec_fn=None,
-            dimensions=(24, 80), pass_fds=(), **kwargs):
+            dimensions=(24, 80), pass_fds=(), restore_signals=False,
+            **kwargs):
         '''Start the given command in a child process in a pseudo terminal.
 
         This does all the fork/exec type of stuff for a pty, and returns an
         instance of PtyProcess.
 
+        When Python has :func:`os.posix_spawn` and preexec_fn is not supplied,
+        this does not fork the current process. It starts a small helper
+        interpreter (``sys.executable -I -S -X utf8``) with
+        :func:`os.posix_spawn`, and the helper sets up the terminal and then
+        calls ``exec``. The child then has no copy of the memory of the
+        current process, so no code from the current process runs in the
+        child. On Solaris, in frozen applications, when the helper interpreter
+        does not start, and when the environment variable
+        ``PTYPROCESS_USE_FORK`` is ``1``, this forks.
+
         If preexec_fn is supplied, it will be called with no arguments in the
         child process before exec-ing the specified command.
         It may, for instance, set signal handlers to SIG_DFL or SIG_IGN.
+        A preexec_fn can only run in a fork of the current process, so this
+        always forks when preexec_fn is supplied.
+
+        If restore_signals is true, the signals that Python ignores (SIGPIPE,
+        SIGXFZ and SIGXFSZ) are reset to their default action in the child
+        before exec, as with :class:`subprocess.Popen`. Otherwise the child
+        gets the action that the current process has for each of these
+        signals.
 
         Dimensions of the psuedoterminal used for the subprocess can be
         specified as a tuple (rows, cols), or the default (24, 80) will be used.
@@ -223,6 +243,27 @@ class PtyProcess(object):
                                     'executable: %s.' % command)
         command = command_with_path
         argv[0] = command
+
+        if preexec_fn is None and _posix_spawn.available():
+            fd, tty = os.openpty()
+            try:
+                _setwinsize(tty, *dimensions)
+                if not echo:
+                    _setecho(tty, False)
+                pid = _posix_spawn.spawn(fd, tty, argv, cwd, env, pass_fds,
+                                         restore_signals)
+            except BaseException:
+                os.close(fd)
+                raise
+            finally:
+                os.close(tty)
+            inst = cls(pid, fd, **kwargs)
+            inst.argv = argv
+            if env is not None:
+                inst.env = env
+            if cwd is not None:
+                inst.launch_dir = cwd
+            return inst
 
         # [issue #119] To prevent the case where exec fails and the user is
         # stuck interacting with a python child process instead of whatever
@@ -258,6 +299,11 @@ class PtyProcess(object):
                 except (IOError, termios.error) as err:
                     if err.args[0] not in (errno.EINVAL, errno.ENOTTY):
                         raise
+
+            if restore_signals:
+                for name in ('SIGPIPE', 'SIGXFZ', 'SIGXFSZ'):
+                    if hasattr(signal, name):
+                        signal.signal(getattr(signal, name), signal.SIG_DFL)
 
             # [issue #119] 3. The child closes the reading end and sets the
             # close-on-exec flag for the writing end.
