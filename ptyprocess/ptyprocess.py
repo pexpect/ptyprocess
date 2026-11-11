@@ -123,6 +123,10 @@ def _setecho(fd, state):
         raise
 
 def _setwinsize(fd, rows, cols):
+    if not (0 <= rows <= 65535 and 0 <= cols <= 65535):
+        raise ValueError(
+            "rows ({}) and cols ({}) must be between 0 and 65535".format(rows, cols)
+        )
     # Some very old platforms have a bug that causes the value for
     # termios.TIOCSWINSZ to be truncated. There was a hack here to work
     # around this, but it caused problems with newer platforms so has been
@@ -813,6 +817,8 @@ class PtyProcess(object):
         TTY-aware applications like vi or curses -- applications that respond to
         the SIGWINCH signal.
         """
+        if self.closed or self.fd < 0:
+            raise PtyProcessError("Cannot set window size on a closed PtyProcess.")
         return _setwinsize(self.fd, rows, cols)
 
 

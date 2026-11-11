@@ -152,3 +152,15 @@ class PtyTestCase(unittest.TestCase):
 
             with open(temp_file_name, 'r') as temp_file_r:
                 assert temp_file_r.read() == 'hello'
+
+    def test_setwinsize_bounds(self):
+        p = PtyProcess.spawn(['true'])
+        p.setwinsize(24, 80)
+        self.assertEqual(p.getwinsize(), (24, 80))
+        with self.assertRaises(ValueError):
+            p.setwinsize(-1, 80)
+        with self.assertRaises(ValueError):
+            p.setwinsize(24, 70000)
+        p.close()
+        with self.assertRaises(Exception):
+            p.setwinsize(24, 80)
