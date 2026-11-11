@@ -430,7 +430,12 @@ class PtyProcess(object):
         methods such as setecho(), setwinsize(), getwinsize() may raise an
         IOError. '''
 
-        return os.isatty(self.fd)
+        if self.closed or self.fd < 0:
+            return False
+        try:
+            return os.isatty(self.fd)
+        except OSError:
+            return False
 
     def waitnoecho(self, timeout=None):
         '''Wait until the terminal ECHO flag is set False.
