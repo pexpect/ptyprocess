@@ -10,6 +10,43 @@ Contents:
 
    api
 
+Reading all output
+------------------
+
+:meth:`~ptyprocess.PtyProcess.read` returns at most ``size`` bytes and can return
+as soon as some output is available. It does not wait for the child process to
+finish or for ``size`` bytes to arrive. To collect all output from a command that
+exits, keep reading until :exc:`EOFError` is raised:
+
+.. code-block:: python
+
+    import sys
+    from ptyprocess import PtyProcessUnicode
+
+    child = PtyProcessUnicode.spawn(
+        [sys.executable, '-c', "print('first'); print('second')"]
+    )
+    chunks = []
+    try:
+        while True:
+            try:
+                chunks.append(child.read())
+            except EOFError:
+                break
+    finally:
+        child.close()
+    output = ''.join(chunks)
+
+For :class:`~ptyprocess.PtyProcess`, which returns bytes, use
+``b''.join(chunks)`` instead. Stop on :exc:`EOFError`, not an empty string:
+:class:`~ptyprocess.PtyProcessUnicode` can return an empty string when a read
+contains only part of a multibyte character.
+
+A read can end in the middle of a line or response. An interactive process may
+keep its terminal open while waiting for input, so collecting one response
+requires looking for the expected prompt or other response delimiter instead
+of waiting for EOF.
+
 What is a pty?
 --------------
 
